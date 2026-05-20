@@ -24,10 +24,16 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	runtimeOnly 'org.postgresql:postgresql'
 
-	// Avro & Schema Registry
+	// Avro & Schema Registry - exclude conflicting swagger deps
+	implementation('io.confluent:kafka-avro-serializer:7.6.1') {
+		exclude group: 'io.swagger.core.v3', module: 'swagger-annotations'
+	}
+	implementation('io.confluent:kafka-schema-registry-client:7.6.1') {
+		exclude group: 'io.swagger.core.v3', module: 'swagger-annotations'
+	}
+
+	// Avro
 	implementation 'org.apache.avro:avro:1.11.3'
-	implementation 'io.confluent:kafka-avro-serializer:7.6.1'
-	implementation 'io.confluent:kafka-schema-registry-client:7.6.1'
 
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
@@ -37,7 +43,7 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
-	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.8'
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.0'
 }
 
 // Avro code generation

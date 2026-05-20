@@ -8,11 +8,16 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.kafka.support.SendResult;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
+import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 
@@ -36,10 +41,11 @@ public class EmployeeEventProducer {
 
     @PostConstruct
     void init() throws Exception {
-        schema = new Schema.Parser().parse(new File(schemaPath));
+        ClassPathResource resource = new ClassPathResource("message.avsc");
+        schema = new Schema.Parser().parse(resource.getInputStream());
         departmentSchema = schema.getField("department").schema();
         eventTypeSchema  = schema.getField("eventType").schema();
-        log.info("Avro schema loaded from: {}", schemaPath);
+        log.info("Avro schema loaded from classpath: message.avsc");
     }
 
     public void sendEmployeeCreatedEvent(Employee employee) {
@@ -66,14 +72,21 @@ public class EmployeeEventProducer {
             employeeEvent.put("firstName",      employee.getFirstName());
             employeeEvent.put("lastName",       employee.getLastName());
             employeeEvent.put("email",          employee.getEmail());
-            employeeEvent.put("salary",         employee.getSalary().unscaledValue().toByteArray());
+            employeeEvent.put("salary", ByteBuffer.wrap(employee.getSalary().unscaledValue().toByteArray()));
             employeeEvent.put("hireDate",       (int) employee.getHireDate().toEpochDay());
             employeeEvent.put("department",     departmentRecord);
             employeeEvent.put("eventType",      new GenericData.EnumSymbol(eventTypeSchema, eventType));
             employeeEvent.put("eventTimestamp", Instant.now().toEpochMilli());
 
+            Message<GenericRecord> message = MessageBuilder
+                    .withPayload(employeeEvent)
+                    .setHeader(KafkaHeaders.TOPIC, employeeTopic)
+                    .setHeader(KafkaHeaders.KEY, String.valueOf(employee.getId()))
+                    .setHeader("eventType", eventType)
+                    .build();
+
             CompletableFuture<SendResult<String, GenericRecord>> future =
-                    kafkaTemplate.send(employeeTopic, String.valueOf(employee.getId()), employeeEvent);
+                    kafkaTemplate.send(message);
 
             future.whenComplete((result, ex) -> {
                 if (ex != null) {

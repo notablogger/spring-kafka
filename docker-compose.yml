@@ -32,7 +32,7 @@ services:
     ports:
       - "2181:2181"
     healthcheck:
-      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      test: ["CMD-SHELL", "echo ruok | timeout 2 bash -c 'cat > /dev/tcp/localhost/2181' && echo imok"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -106,17 +106,13 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-    entrypoint: [ "/bin/sh", "-c" ]
-    command: |
-      "
-      echo 'Creating Kafka topics...'
-      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists \
-        --topic employee_topic \
-        --partitions 3 \
-        --replication-factor 1
-      echo 'Topics created:'
-      kafka-topics --bootstrap-server kafka:29092 --list
-      "
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo 'Creating Kafka topics...'
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic employee_topic --partitions 3 --replication-factor 1
+        echo 'Topics created:'
+        kafka-topics --bootstrap-server kafka:29092 --list
     restart: on-failure
 
   # ─── Schema Registry Init ─────────────────────────────────────
@@ -129,29 +125,8 @@ services:
     restart: on-failure
     volumes:
       - ./src/main/avro/message.avsc:/schemas/employee.avsc:ro
-    entrypoint: [ "/bin/sh", "-c" ]
-    command: |
-      "
-      apk add --no-cache curl jq > /dev/null 2>&1
-
-      echo 'Waiting for Schema Registry...'
-      until curl -sf http://schema-registry:8081/subjects > /dev/null; do
-        sleep 3
-      done
-
-      echo 'Registering EmployeeEvent Avro schema from file...'
-      SCHEMA=\$(cat /schemas/employee.avsc | jq -c tostring)
-      PAYLOAD=\$(jq -n --argjson schema \"\$SCHEMA\" '{schema: \$schema, schemaType: \"AVRO\"}')
-
-      curl -sf -X POST http://schema-registry:8081/subjects/employee_topic-value/versions \
-        -H 'Content-Type: application/vnd.schemaregistry.v1+json' \
-        -d \"\$PAYLOAD\"
-
-      echo ''
-      echo 'Schema registered. Registered subjects:'
-      curl -sf http://schema-registry:8081/subjects
-      echo ''
-      "
+      - ./scripts/register-schema.sh:/register-schema.sh:ro
+    entrypoint: ["/bin/sh", "/register-schema.sh"]
 
   # ─── Spring Boot Application ──────────────────────────────────
   app:
@@ -172,6 +147,7 @@ services:
       SPRING_DATASOURCE_USERNAME: nikuser
       SPRING_DATASOURCE_PASSWORD: nikpassword
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_KAFKA_PROPERTIES_SCHEMA_REGISTRY_URL: http://schema-registry:8081
 
 volumes:
   postgres_data:
