@@ -1,0 +1,36 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+out/
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+
+# Docker
+*.pid
+*.seed
+*.swp
+
+# Avro generated sources
+**/generated-sources/
+**/generated-main-avro-java/
+
+# Environment files
+.env
+
+# Node (if any UI)
+node_modules/
+
+# Test reports
+test-output/
+
