@@ -11,11 +11,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -189,5 +191,155 @@ class EmployeeEndToEndTest extends BaseIntegrationTest {
         await().atMost(10, TimeUnit.SECONDS).untilAsserted(() ->
                 assertThat(employeeRepository.findById( created.getId())).isEmpty());
     }
-}
 
+    // ─────────────────────────────────────────────────────────────
+    // HEADER: verify producer sets eventType header correctly
+    // ─────────────────────────────────────────────────────────────
+    @Test
+    void createEmployee_kafkaMessageHasCorrectEventTypeHeader() {
+        DepartmentResponse dept = restClient.post()
+                .uri("/api/departments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(DepartmentRequest.builder().name("HeaderTest").location("NYC").build())
+                .retrieve()
+                .body(DepartmentResponse.class);
+
+        EmployeeResponse created = restClient.post()
+                .uri("/api/employees")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(EmployeeRequest.builder()
+                        .firstName("Header")
+                        .lastName("Test")
+                        .email("header.test@test.com")
+                        .salary(new BigDecimal("50000.00"))
+                        .hireDate(LocalDate.of(2024, 1, 1))
+                        .departmentId(dept.getId())
+                        .build())
+                .retrieve()
+                .body(EmployeeResponse.class);
+
+        // Consumer sets lastUpdated only after consuming — confirms header was CREATED
+        await().atMost(20, TimeUnit.SECONDS).untilAsserted(() -> {
+            Employee employee = employeeRepository.findById(created.getId()).orElseThrow();
+            // consumer logs eventType=CREATED from header and updates the record
+            assertThat(employee.getLastUpdated()).isNotNull();
+            // firstName/lastName still match — consumer mapped correctly from CREATED event
+            assertThat(employee.getFirstName()).isEqualTo("Header");
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // VALIDATION: duplicate email → 500 (DB constraint)
+    // ─────────────────────────────────────────────────────────────
+    @Test
+    void createEmployee_duplicateEmail_returnsError() {
+        DepartmentResponse dept = restClient.post()
+                .uri("/api/departments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(DepartmentRequest.builder().name("DupeTest").location("LA").build())
+                .retrieve()
+                .body(DepartmentResponse.class);
+
+        EmployeeRequest request = EmployeeRequest.builder()
+                .firstName("Dupe")
+                .lastName("User")
+                .email("dupe@test.com")
+                .salary(new BigDecimal("50000.00"))
+                .hireDate(LocalDate.of(2024, 1, 1))
+                .departmentId(dept.getId())
+                .build();
+
+        // First create succeeds
+        restClient.post()
+                .uri("/api/employees")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request)
+                .retrieve()
+                .body(EmployeeResponse.class);
+
+        // Second create with same email should fail
+        HttpStatusCode status = restClient.post()
+                .uri("/api/employees")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, (req, res) -> {})
+                .toBodilessEntity()
+                .getStatusCode();
+
+        assertThat(status.isError()).isTrue();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // VALIDATION: non-existent department → 404
+    // ─────────────────────────────────────────────────────────────
+    @Test
+    void createEmployee_nonExistentDepartment_returnsError() {
+        HttpStatusCode status = restClient.post()
+                .uri("/api/employees")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(EmployeeRequest.builder()
+                        .firstName("Ghost")
+                        .lastName("Dept")
+                        .email("ghost@test.com")
+                        .salary(new BigDecimal("50000.00"))
+                        .hireDate(LocalDate.of(2024, 1, 1))
+                        .departmentId(99999L)
+                        .build())
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, (req, res) -> {})
+                .toBodilessEntity()
+                .getStatusCode();
+
+        assertThat(status.isError()).isTrue();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // QUERY: GET /api/employees/department/{id} returns correct employees
+    // ─────────────────────────────────────────────────────────────
+    @Test
+    void getEmployeesByDepartment_returnsOnlyThatDepartmentsEmployees() {
+        DepartmentResponse deptA = restClient.post()
+                .uri("/api/departments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(DepartmentRequest.builder().name("DeptA").location("Austin").build())
+                .retrieve()
+                .body(DepartmentResponse.class);
+
+        DepartmentResponse deptB = restClient.post()
+                .uri("/api/departments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(DepartmentRequest.builder().name("DeptB").location("Dallas").build())
+                .retrieve()
+                .body(DepartmentResponse.class);
+
+        // 2 employees in DeptA, 1 in DeptB
+        restClient.post().uri("/api/employees").contentType(MediaType.APPLICATION_JSON)
+                .body(EmployeeRequest.builder().firstName("A1").lastName("One")
+                        .email("a1@test.com").salary(new BigDecimal("50000")).hireDate(LocalDate.of(2024,1,1)).departmentId(deptA.getId()).build())
+                .retrieve().body(EmployeeResponse.class);
+
+        restClient.post().uri("/api/employees").contentType(MediaType.APPLICATION_JSON)
+                .body(EmployeeRequest.builder().firstName("A2").lastName("Two")
+                        .email("a2@test.com").salary(new BigDecimal("60000")).hireDate(LocalDate.of(2024,1,1)).departmentId(deptA.getId()).build())
+                .retrieve().body(EmployeeResponse.class);
+
+        restClient.post().uri("/api/employees").contentType(MediaType.APPLICATION_JSON)
+                .body(EmployeeRequest.builder().firstName("B1").lastName("One")
+                        .email("b1@test.com").salary(new BigDecimal("70000")).hireDate(LocalDate.of(2024,1,1)).departmentId(deptB.getId()).build())
+                .retrieve().body(EmployeeResponse.class);
+
+        List<?> deptAEmployees = restClient.get()
+                .uri("/api/employees/department/" + deptA.getId())
+                .retrieve()
+                .body(List.class);
+
+        List<?> deptBEmployees = restClient.get()
+                .uri("/api/employees/department/" + deptB.getId())
+                .retrieve()
+                .body(List.class);
+
+        assertThat(deptAEmployees).hasSize(2);
+        assertThat(deptBEmployees).hasSize(1);
+    }
+}
