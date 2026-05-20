@@ -1,4 +1,4 @@
-package com.nik.kafka.kafka;
+package com.nik.kafka.mapstruct;
 
 import com.nik.kafka.avro.DepartmentInfo;
 import com.nik.kafka.avro.EmployeeEvent;

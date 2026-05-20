@@ -1,6 +1,7 @@
 package com.nik.kafka.kafka;
 
 import com.nik.kafka.avro.EmployeeEvent;
+import com.nik.kafka.mapstruct.EmployeeEventMapper;
 import com.nik.kafka.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

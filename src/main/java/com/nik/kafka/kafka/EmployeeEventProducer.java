@@ -2,6 +2,8 @@ package com.nik.kafka.kafka;
 
 import com.nik.kafka.avro.EmployeeEvent;
 import com.nik.kafka.entity.Employee;
+import com.nik.kafka.mapstruct.EmployeeToEventMapper;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

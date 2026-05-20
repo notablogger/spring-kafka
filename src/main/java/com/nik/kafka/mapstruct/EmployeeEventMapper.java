@@ -1,4 +1,4 @@
-package com.nik.kafka.kafka;
+package com.nik.kafka.mapstruct;
 
 import com.nik.kafka.avro.EmployeeEvent;
 import com.nik.kafka.entity.Department;
@@ -8,8 +8,7 @@ import org.mapstruct.*;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.time.Instant;
-import java.time.LocalDate;
+
 
 @Mapper(componentModel = "spring")
 public interface EmployeeEventMapper {
