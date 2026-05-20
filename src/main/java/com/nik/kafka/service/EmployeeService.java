@@ -4,6 +4,7 @@ import com.nik.kafka.dto.EmployeeRequest;
 import com.nik.kafka.dto.EmployeeResponse;
 import com.nik.kafka.entity.Department;
 import com.nik.kafka.entity.Employee;
+import com.nik.kafka.kafka.EmployeeEventProducer;
 import com.nik.kafka.repository.DepartmentRepository;
 import com.nik.kafka.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ public class EmployeeService {
 
     private final EmployeeRepository employeeRepository;
     private final DepartmentRepository departmentRepository;
+    private final EmployeeEventProducer employeeEventProducer;
 
     public List<EmployeeResponse> getAll() {
         return employeeRepository.findAll().stream()
@@ -46,7 +48,9 @@ public class EmployeeService {
                 .hireDate(request.getHireDate())
                 .department(department)
                 .build();
-        return toResponse(employeeRepository.save(employee));
+        Employee saved = employeeRepository.save(employee);
+        employeeEventProducer.sendEmployeeCreatedEvent(saved);
+        return toResponse(saved);
     }
 
     @Transactional
@@ -59,13 +63,16 @@ public class EmployeeService {
         employee.setSalary(request.getSalary());
         employee.setHireDate(request.getHireDate());
         employee.setDepartment(department);
-        return toResponse(employeeRepository.save(employee));
+        Employee saved = employeeRepository.save(employee);
+        employeeEventProducer.sendEmployeeUpdatedEvent(saved);
+        return toResponse(saved);
     }
 
     @Transactional
     public void delete(Long id) {
-        findOrThrow(id);
+        Employee employee = findOrThrow(id);
         employeeRepository.deleteById(id);
+        employeeEventProducer.sendEmployeeDeletedEvent(employee);
     }
 
     private Employee findOrThrow(Long id) {
@@ -91,4 +98,3 @@ public class EmployeeService {
                 .build();
     }
 }
-

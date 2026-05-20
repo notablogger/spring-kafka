@@ -4,7 +4,7 @@ spring:
 
   # ─── DataSource (PostgreSQL) ──────────────────────────────────
   datasource:
-    url: jdbc:postgresql://localhost:5432/nikdb
+    url: jdbc:postgresql://localhost:5432/nik_kafka_db
     username: nikuser
     password: nikpassword
     driver-class-name: org.postgresql.Driver
@@ -36,6 +36,12 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
       enable-auto-commit: false
+    topic:
+      employee: employee_topic
+
+  # ─── Avro ────────────────────────────────────────────────────
+  avro:
+    schema-path: src/main/avro/message.avsc
 
 # ─── OpenAPI / Swagger ────────────────────────────────────────
 springdoc:
