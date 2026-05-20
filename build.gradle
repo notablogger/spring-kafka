@@ -2,6 +2,7 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.0.6'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'com.github.davidmc24.gradle.plugin.avro' version '1.9.1'
 }
 
 group = 'com.nik.kafka'
@@ -38,6 +39,12 @@ dependencies {
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
 
+	// MapStruct
+	implementation 'org.mapstruct:mapstruct:1.6.3'
+	annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
+	// MapStruct + Lombok together
+	annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-kafka-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
@@ -47,19 +54,12 @@ dependencies {
 }
 
 // Avro code generation
-plugins.withId('java') {
-	sourceSets.main.java.srcDirs += ["$buildDir/generated/avro"]
+avro {
+	stringType = 'String'
+	fieldVisibility = 'PRIVATE'
 }
 
-tasks.register('generateAvroSources') {
-	def avroSrcDir = file('src/main/avro')
-	def avroOutDir = file("$buildDir/generated/avro")
-	inputs.dir avroSrcDir
-	outputs.dir avroOutDir
-	doLast {
-		avroOutDir.mkdirs()
-	}
-}
+sourceSets.main.java.srcDirs += ["$buildDir/generated-main-avro-java"]
 
 tasks.named('test') {
 	useJUnitPlatform()

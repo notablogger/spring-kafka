@@ -1,16 +1,15 @@
 package com.nik.kafka.kafka;
 
+import com.nik.kafka.avro.EmployeeEvent;
 import com.nik.kafka.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 
 @Slf4j
 @Component
@@ -18,12 +17,13 @@ import java.time.Instant;
 public class EmployeeEventConsumer {
 
     private final EmployeeRepository employeeRepository;
+    private final EmployeeEventMapper employeeEventMapper;
 
     @KafkaListener(
             topics = "${spring.kafka.topic.employee}",
             groupId = "${spring.kafka.consumer.group-id}"
     )
-    public void consume(ConsumerRecord<String, GenericRecord> record) {
+    public void consume(ConsumerRecord<String, EmployeeEvent> record) {
         String eventType = "UNKNOWN";
         try {
             // Extract eventType header
@@ -32,8 +32,8 @@ public class EmployeeEventConsumer {
                 eventType = new String(header.value(), StandardCharsets.UTF_8);
             }
 
-            GenericRecord payload = record.value();
-            if (payload == null) {
+            EmployeeEvent event = record.value();
+            if (event == null) {
                 log.warn("⚠️  Received null payload — topic={} partition={} offset={}",
                         record.topic(), record.partition(), record.offset());
                 return;
@@ -45,22 +45,22 @@ public class EmployeeEventConsumer {
             log.info("   Topic   → {}  Partition: {}  Offset: {}",
                     record.topic(), record.partition(), record.offset());
             log.info("   Key     → {}", record.key());
-            log.info("     id         : {}", payload.get("id"));
-            log.info("     firstName  : {}", payload.get("firstName"));
-            log.info("     lastName   : {}", payload.get("lastName"));
-            log.info("     email      : {}", payload.get("email"));
-            log.info("     eventType  : {}", payload.get("eventType"));
-            log.info("     timestamp  : {}", payload.get("eventTimestamp"));
-            log.info("     department : {}", payload.get("department"));
+            log.info("     id         : {}", event.getId());
+            log.info("     firstName  : {}", event.getFirstName());
+            log.info("     lastName   : {}", event.getLastName());
+            log.info("     email      : {}", event.getEmail());
+            log.info("     eventType  : {}", event.getEventType());
+            log.info("     timestamp  : {}", event.getEventTimestamp());
+            log.info("     department : {}", event.getDepartment());
             log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
-            // ─── Update lastUpdated on the employee in DB ──────────
-            Long employeeId = ((Number) payload.get("id")).longValue();
-            employeeRepository.findById(employeeId).ifPresentOrElse(employee -> {
-                employee.setLastUpdated(Instant.now());
+            // ─── Map EmployeeEvent → Employee entity via MapStruct ──
+            final String finalEventType = eventType;
+            employeeRepository.findById(event.getId()).ifPresentOrElse(employee -> {
+                employeeEventMapper.updateEmployeeFromEvent(event, employee);
                 employeeRepository.save(employee);
-                log.info("✅ lastUpdated set for employeeId={} eventType={}", employeeId, eventType);
-            }, () -> log.warn("⚠️  Employee id={} not found in DB — skipping lastUpdated", employeeId));
+                log.info("✅ Employee id={} fully updated from Kafka event [{}]", event.getId(), finalEventType);
+            }, () -> log.warn("⚠️  Employee id={} not found in DB — skipping update", event.getId()));
 
         } catch (Exception e) {
             log.error("❌ Failed to consume EmployeeEvent [{}] — topic={} partition={} offset={} key={} : {}",
