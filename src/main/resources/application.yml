@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: nik-kafka
+
+  # ─── DataSource (PostgreSQL) ──────────────────────────────────
+  datasource:
+    url: jdbc:postgresql://localhost:5432/nikdb
+    username: nikuser
+    password: nikpassword
+    driver-class-name: org.postgresql.Driver
+
+  # ─── JPA / Hibernate ─────────────────────────────────────────
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  # ─── Kafka ───────────────────────────────────────────────────
+  kafka:
+    bootstrap-servers: localhost:9092
+    properties:
+      schema.registry.url: http://localhost:8081
+      specific.avro.reader: true
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: nik-kafka-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+      enable-auto-commit: false
+
+# ─── OpenAPI / Swagger ────────────────────────────────────────
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+# ─── Server ──────────────────────────────────────────────────
+server:
+  port: 8080
