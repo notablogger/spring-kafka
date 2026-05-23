@@ -1,57 +1,71 @@
 # How AI Helped Me Build This
 
-This project was built entirely through conversation with GitHub Copilot (GPT-4 class model) inside JetBrains IDE. No boilerplate was written by hand.
+This project was built through conversation with GitHub Copilot inside JetBrains IDE. No boilerplate was written by hand. But more importantly — **I learned by doing it this way, not despite it**.
 
 ---
 
-## What Was Built
+## The Learning Philosophy
 
-A production-style, event-driven Spring Boot application with:
+Using AI to build doesn't mean you skip the learning. It means you spend your time on **architecture decisions, debugging, and understanding** — not on remembering annotations or fighting Maven dependency trees.
 
-- REST API (Spring MVC) with Swagger docs
-- PostgreSQL as the write source of truth
-- Apache Kafka with Avro serialisation and Schema Registry
-- MongoDB as a read-optimised event log
-- MapStruct for entity → Avro mapping
-- Docker Compose for the full local stack
+Every piece of code AI generated, I read, questioned, and understood before moving on. When something broke, I didn't just paste the error — I diagnosed it first, then used AI to confirm or correct my thinking.
 
 ---
 
-## How AI Was Used
+## What AI Generated
 
-### 1. Project Scaffolding
-Rather than using Spring Initializr manually, the entire `build.gradle`, project structure, and all base classes were generated in one pass from a high-level description of the architecture.
+### Project Scaffold
+The entire `build.gradle`, package structure, Docker Compose, and `application.yml` were generated from a single high-level description. This saved ~2 hours of setup and let me go straight to learning the actual patterns.
 
-### 2. Domain Modelling
-AI designed the entity model (`Employee`, `Department`, `EmployeeEventDocument`), DTOs (`EmployeeRequest`, `EmployeeResponse`), and their relationships — including JPA annotations, Lombok, and MongoDB document mappings.
+### Domain Model
+AI designed `Employee`, `Department`, and `EmployeeEventDocument` entities — including JPA annotations, Lombok, MongoDB document mappings, and the relationship between them.
 
-### 3. Avro Schema Design
-The `message.avsc` schema was generated with correct Avro logical types — `decimal` for salary, `date` for hire date, nested `DepartmentInfo` record, and an `EventType` enum — all in one shot.
+### Avro Schema
+`message.avsc` was generated with correct Avro logical types:
+- `decimal` for salary (with precision/scale)
+- `date` for hire date
+- Nested `DepartmentInfo` record
+- `EventType` enum
 
-### 4. Kafka Producer & Consumer
-`EmployeeEventProducer` and `EmployeeEventConsumer` were fully generated, including:
+This taught me how Avro logical types map to Java types — something that takes hours to figure out from docs alone.
+
+### Kafka Producer & Consumer
+`EmployeeEventProducer` and `EmployeeEventConsumer` were fully generated with:
 - Kafka message headers for `eventType`
-- CompletableFuture-based async send with logging
+- `CompletableFuture`-based async send with logging callbacks
 - Consumer extracting headers and persisting to MongoDB
 
-### 5. MapStruct Mapper
-`EmployeeToEventMapper` was generated with `@Context` for the event type string, expression mappings for `EventType.valueOf()` and `Instant.now()`, and the nested `DepartmentInfo` builder.
-
-### 6. Architectural Pivot (key moment)
-Midway through, the architecture was deliberately changed: **GET endpoints were redirected from Postgres to MongoDB**. AI refactored `EmployeeService` to:
-- Stream all MongoDB event documents
-- Deduplicate to the latest event per employee ID
-- Filter out `DELETED` records
-- Serve reads from the event log
-
-This was done in a single instruction with zero manual code changes.
-
-### 7. Documentation
-README and all AI docs were written by AI based on the actual code state — not a template.
+### MapStruct Mapper
+`EmployeeToEventMapper` was generated with `@Context` for passing the event type, expression mappings for `EventType.valueOf()` and `Instant.now()`, and the nested `DepartmentInfo` builder — a pattern I wouldn't have discovered quickly on my own.
 
 ---
 
-## Key Takeaway
+## Key Moments Where I Made the Calls
 
-AI acted as a senior engineer pair-programmer. The human provided intent and architecture direction; AI handled implementation, refactoring, and documentation. The entire project was built through natural language alone.
+### The CQRS Pivot
+Midway through, I decided: **GET endpoints should read from MongoDB, not Postgres**. This is a real architectural pattern (CQRS). AI refactored the entire `EmployeeService` in one pass — but the decision was mine, based on understanding what the event log was for.
 
+### Dropping Tests, Staying Focused
+When the Testcontainers setup kept failing due to version incompatibilities, I made the call to **remove tests and focus on the core architecture**. AI tried three different approaches to fix it — I cut the scope. That's engineering judgement.
+
+### Standards Audit
+I asked AI to audit the project against best practices. It found 6 real issues — a wrong Kafka port, missing validation, a lazy loading bug, wrong starter dependency names. I understood each one before accepting the fix.
+
+---
+
+## What I Actually Learned
+
+| Topic | How I Learned It |
+|---|---|
+| Kafka producers/consumers | Built one, watched it break, fixed it |
+| Avro logical types | Read the generated code, understood the mapping |
+| CQRS pattern | Made the architectural decision myself, saw it implemented |
+| Schema Registry | Understood why it exists when consumer deserialization was set up |
+| Spring Boot transaction management | Hit the `LazyInitializationException`, understood why `@Transactional(readOnly=true)` fixes it |
+| Proper REST error handling | Saw 500s where 404s should be, fixed it with `@RestControllerAdvice` |
+
+---
+
+## The Multi-Language Plan
+
+Now that I understand the Kafka integration patterns in Java, I'll rebuild the **exact same application** in Go, Python, and Node.js — using the same approach. Same architecture, same Avro schema, same Kafka topic. Different language, different patterns, same understanding built each time.

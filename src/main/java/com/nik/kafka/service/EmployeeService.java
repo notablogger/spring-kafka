@@ -5,6 +5,7 @@ import com.nik.kafka.dto.EmployeeResponse;
 import com.nik.kafka.entity.Department;
 import com.nik.kafka.entity.Employee;
 import com.nik.kafka.entity.EmployeeEventDocument;
+import com.nik.kafka.exception.ResourceNotFoundException;
 import com.nik.kafka.kafka.EmployeeEventProducer;
 import com.nik.kafka.repository.DepartmentRepository;
 import com.nik.kafka.repository.EmployeeEventDocumentRepository;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -27,15 +29,7 @@ public class EmployeeService {
     // ─── READ from MongoDB ────────────────────────────────────────
 
     public List<EmployeeResponse> getAll() {
-        // Get the latest event per employee; exclude DELETED
-        return eventDocumentRepository.findAll().stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        EmployeeEventDocument::getEmployeeId,
-                        d -> d,
-                        (a, b) -> a.getEventTimestamp().isAfter(b.getEventTimestamp()) ? a : b
-                ))
-                .values().stream()
-                .filter(d -> !"DELETED".equals(d.getEventType()))
+        return latestActiveDocuments().values().stream()
                 .map(this::fromDocument)
                 .toList();
     }
@@ -43,23 +37,17 @@ public class EmployeeService {
     public EmployeeResponse getById(Long id) {
         EmployeeEventDocument doc = eventDocumentRepository
                 .findTopByEmployeeIdOrderByEventTimestampDesc(id)
-                .orElseThrow(() -> new RuntimeException("Employee not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + id));
         if ("DELETED".equals(doc.getEventType())) {
-            throw new RuntimeException("Employee not found with id: " + id);
+            throw new ResourceNotFoundException("Employee not found with id: " + id);
         }
         return fromDocument(doc);
     }
 
     public List<EmployeeResponse> getByDepartment(Long departmentId) {
+        // Verify the department exists first
         Department dept = findDepartmentOrThrow(departmentId);
-        return eventDocumentRepository.findAll().stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        EmployeeEventDocument::getEmployeeId,
-                        d -> d,
-                        (a, b) -> a.getEventTimestamp().isAfter(b.getEventTimestamp()) ? a : b
-                ))
-                .values().stream()
-                .filter(d -> !"DELETED".equals(d.getEventType()))
+        return latestActiveDocuments().values().stream()
                 .filter(d -> dept.getName().equals(d.getDepartmentName()))
                 .map(this::fromDocument)
                 .toList();
@@ -107,17 +95,29 @@ public class EmployeeService {
 
     // ─── Helpers ──────────────────────────────────────────────────
 
+    /** Deduplicate all MongoDB docs to latest per employeeId, excluding DELETED */
+    private java.util.Map<Long, EmployeeEventDocument> latestActiveDocuments() {
+        return eventDocumentRepository.findAll().stream()
+                .collect(Collectors.toMap(
+                        EmployeeEventDocument::getEmployeeId,
+                        d -> d,
+                        (a, b) -> a.getEventTimestamp().isAfter(b.getEventTimestamp()) ? a : b
+                ))
+                .entrySet().stream()
+                .filter(e -> !"DELETED".equals(e.getValue().getEventType()))
+                .collect(Collectors.toMap(java.util.Map.Entry::getKey, java.util.Map.Entry::getValue));
+    }
+
     private Employee findOrThrow(Long id) {
         return employeeRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Employee not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + id));
     }
 
     private Department findDepartmentOrThrow(Long id) {
         return departmentRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Department not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Department not found with id: " + id));
     }
 
-    /** Map MongoDB document → EmployeeResponse */
     private EmployeeResponse fromDocument(EmployeeEventDocument doc) {
         return EmployeeResponse.builder()
                 .id(doc.getEmployeeId())
@@ -133,7 +133,6 @@ public class EmployeeService {
                 .build();
     }
 
-    /** Map Postgres entity → EmployeeResponse (used immediately after write, before Kafka event lands) */
     private EmployeeResponse toResponse(Employee e) {
         return EmployeeResponse.builder()
                 .id(e.getId())

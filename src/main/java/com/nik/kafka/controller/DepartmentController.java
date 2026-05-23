@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -43,7 +44,7 @@ public class DepartmentController {
     @Operation(summary = "Create a new department")
     @ApiResponse(responseCode = "201", description = "Department created")
     @PostMapping
-    public ResponseEntity<DepartmentResponse> create(@RequestBody DepartmentRequest request) {
+    public ResponseEntity<DepartmentResponse> create(@Valid @RequestBody DepartmentRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(departmentService.create(request));
     }
 
@@ -54,7 +55,7 @@ public class DepartmentController {
     })
     @PutMapping("/{id}")
     public ResponseEntity<DepartmentResponse> update(@Parameter(description = "Department ID") @PathVariable Long id,
-                                                     @RequestBody DepartmentRequest request) {
+                                                     @Valid @RequestBody DepartmentRequest request) {
         return ResponseEntity.ok(departmentService.update(id, request));
     }
 

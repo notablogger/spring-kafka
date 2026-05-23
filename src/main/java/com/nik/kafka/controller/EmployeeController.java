@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -51,7 +52,7 @@ public class EmployeeController {
     @Operation(summary = "Create a new employee")
     @ApiResponse(responseCode = "201", description = "Employee created")
     @PostMapping
-    public ResponseEntity<EmployeeResponse> create(@RequestBody EmployeeRequest request) {
+    public ResponseEntity<EmployeeResponse> create(@Valid @RequestBody EmployeeRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(employeeService.create(request));
     }
 
@@ -62,7 +63,7 @@ public class EmployeeController {
     })
     @PutMapping("/{id}")
     public ResponseEntity<EmployeeResponse> update(@Parameter(description = "Employee ID") @PathVariable Long id,
-                                                   @RequestBody EmployeeRequest request) {
+                                                   @Valid @RequestBody EmployeeRequest request) {
         return ResponseEntity.ok(employeeService.update(id, request));
     }
 

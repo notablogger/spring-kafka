@@ -3,6 +3,7 @@ package com.nik.kafka.service;
 import com.nik.kafka.dto.DepartmentRequest;
 import com.nik.kafka.dto.DepartmentResponse;
 import com.nik.kafka.entity.Department;
+import com.nik.kafka.exception.ResourceNotFoundException;
 import com.nik.kafka.repository.DepartmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,12 +17,14 @@ public class DepartmentService {
 
     private final DepartmentRepository departmentRepository;
 
+    @Transactional(readOnly = true)
     public List<DepartmentResponse> getAll() {
         return departmentRepository.findAll().stream()
                 .map(this::toResponse)
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public DepartmentResponse getById(Long id) {
         return toResponse(findOrThrow(id));
     }
@@ -51,16 +54,17 @@ public class DepartmentService {
 
     private Department findOrThrow(Long id) {
         return departmentRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Department not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Department not found with id: " + id));
     }
 
     private DepartmentResponse toResponse(Department d) {
+        // employees list is LAZY — size() is safe here because we are inside a transaction
+        int count = d.getEmployees() == null ? 0 : d.getEmployees().size();
         return DepartmentResponse.builder()
                 .id(d.getId())
                 .name(d.getName())
                 .location(d.getLocation())
-                .employeeCount(d.getEmployees() == null ? 0 : d.getEmployees().size())
+                .employeeCount(count)
                 .build();
     }
 }
-
