@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 
 @Getter
@@ -37,4 +38,13 @@ public class EmployeeResponse {
 
     @Schema(description = "Name of the department", example = "Engineering")
     private String departmentName;
+
+    @Schema(description = "Department location", example = "New York")
+    private String departmentLocation;
+
+    @Schema(description = "Last event type", example = "CREATED")
+    private String eventType;
+
+    @Schema(description = "Timestamp of the last event")
+    private Instant eventTimestamp;
 }

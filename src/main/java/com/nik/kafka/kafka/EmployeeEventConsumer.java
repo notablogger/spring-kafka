@@ -1,8 +1,8 @@
 package com.nik.kafka.kafka;
 
 import com.nik.kafka.avro.EmployeeEvent;
-import com.nik.kafka.mapstruct.EmployeeEventMapper;
-import com.nik.kafka.repository.EmployeeRepository;
+import com.nik.kafka.entity.EmployeeEventDocument;
+import com.nik.kafka.repository.EmployeeEventDocumentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -11,14 +11,14 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class EmployeeEventConsumer {
 
-    private final EmployeeRepository employeeRepository;
-    private final EmployeeEventMapper employeeEventMapper;
+    private final EmployeeEventDocumentRepository eventDocumentRepository;
 
     @KafkaListener(
             topics = "${spring.kafka.topic.employee}",
@@ -35,38 +35,34 @@ public class EmployeeEventConsumer {
 
             EmployeeEvent event = record.value();
             if (event == null) {
-                log.warn("⚠️  Received null payload — topic={} partition={} offset={}",
+                log.warn("Received null payload — topic={} partition={} offset={}",
                         record.topic(), record.partition(), record.offset());
                 return;
             }
 
-            log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            log.info("📨 Employee Event Consumed");
-            log.info("   Header  → eventType  : {}", eventType);
-            log.info("   Topic   → {}  Partition: {}  Offset: {}",
-                    record.topic(), record.partition(), record.offset());
-            log.info("   Key     → {}", record.key());
-            log.info("     id         : {}", event.getId());
-            log.info("     firstName  : {}", event.getFirstName());
-            log.info("     lastName   : {}", event.getLastName());
-            log.info("     email      : {}", event.getEmail());
-            log.info("     eventType  : {}", event.getEventType());
-            log.info("     timestamp  : {}", event.getEventTimestamp());
-            log.info("     department : {}", event.getDepartment());
-            log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            // Create MongoDB document from EmployeeEvent
+            EmployeeEventDocument doc = EmployeeEventDocument.builder()
+                    .employeeId(event.getId())
+                    .firstName(event.getFirstName())
+                    .lastName(event.getLastName())
+                    .email(event.getEmail())
+                    .salary(event.getSalary())
+                    .hireDate(event.getHireDate())
+                    .departmentName(event.getDepartment().getName())
+                    .departmentLocation(event.getDepartment().getLocation())
+                    .eventType(eventType)
+                    .eventTimestamp(Instant.ofEpochMilli(event.getEventTimestamp()))
+                    .receivedAt(Instant.now())
+                    .build();
 
-            // ─── Map EmployeeEvent → Employee entity via MapStruct ──
-            final String finalEventType = eventType;
-            employeeRepository.findById(event.getId()).ifPresentOrElse(employee -> {
-                employeeEventMapper.updateEmployeeFromEvent(event, employee);
-                employeeRepository.save(employee);
-                log.info("✅ Employee id={} fully updated from Kafka event [{}]", event.getId(), finalEventType);
-            }, () -> log.warn("⚠️  Employee id={} not found in DB — skipping update", event.getId()));
+            // Save document to MongoDB
+            eventDocumentRepository.save(doc);
+
+            log.info("Saved EmployeeEvent [{}] for employee id={} to MongoDB", eventType, event.getId());
 
         } catch (Exception e) {
-            log.error("❌ Failed to consume EmployeeEvent [{}] — topic={} partition={} offset={} key={} : {}",
-                    eventType, record.topic(), record.partition(), record.offset(), record.key(),
-                    e.getMessage(), e);
+            log.error("Failed to consume EmployeeEvent [{}] — topic={} partition={} offset={}: {}",
+                    eventType, record.topic(), record.partition(), record.offset(), e.getMessage(), e);
         }
     }
 }

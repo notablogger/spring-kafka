@@ -19,6 +19,11 @@ spring:
       hibernate:
         format_sql: true
 
+  # ─── MongoDB ─────────────────────────────────────────────────
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/nik_kafka_events
+
   # ─── Kafka ───────────────────────────────────────────────────
   kafka:
     bootstrap-servers: kafka:9092
