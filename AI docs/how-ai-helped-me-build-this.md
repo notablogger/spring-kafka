@@ -45,9 +45,6 @@ This taught me how Avro logical types map to Java types — something that takes
 ### The CQRS Pivot
 Midway through, I decided: **GET endpoints should read from MongoDB, not Postgres**. This is a real architectural pattern (CQRS). AI refactored the entire `EmployeeService` in one pass — but the decision was mine, based on understanding what the event log was for.
 
-### Dropping Tests, Staying Focused
-When the Testcontainers setup kept failing due to version incompatibilities, I made the call to **remove tests and focus on the core architecture**. AI tried three different approaches to fix it — I cut the scope. That's engineering judgement.
-
 ### Standards Audit
 I asked AI to audit the project against best practices. It found 6 real issues — a wrong Kafka port, missing validation, a lazy loading bug, wrong starter dependency names. I understood each one before accepting the fix.
 
