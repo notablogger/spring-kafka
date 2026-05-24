@@ -155,3 +155,47 @@ Each version will live in its own folder/branch with the same REST contract and 
 - CQRS — separating read and write models across different databases
 - How to use AI as a learning tool, not a shortcut
 - Schema Registry and why it matters for contract enforcement
+
+---
+
+## 🧪 Running Tests
+
+Integration tests spin up **real containers** via Testcontainers — no mocks, no stubs.
+
+```bash
+./gradlew test
+```
+
+### What the tests cover
+
+| Test | What it verifies |
+|---|---|
+| `createDepartment_validRequest_returns201` | POST creates dept, returns 201 + body |
+| `getAllDepartments_returns200WithList` | GET returns list containing created dept |
+| `getDepartmentById_existingId_returns200` | GET by ID returns correct body |
+| `getDepartmentById_nonExistentId_returns404` | Missing ID returns 404, not 500 |
+| `updateDepartment_validRequest_returns200` | PUT updates name/location |
+| `createDepartment_missingName_returns400` | Validation rejects blank name |
+| `createEmployee_validRequest_returns201AndSavesToPostgres` | POST creates employee in Postgres |
+| `createEmployee_kafkaProducerFiresEvent_consumerSavesToMongoDB` | Kafka CREATED event lands in MongoDB with correct fields |
+| `getEmployeeById_readsFromMongoDB_returnsCorrectSnapshot` | GET reads from MongoDB, returns eventType + eventTimestamp |
+| `getAllEmployees_readsFromMongoDB_returnsNonEmptyList` | GET all reads from MongoDB |
+| `getEmployeesByDepartment_readsFromMongoDB_returnsFilteredList` | Department filter works from MongoDB |
+| `updateEmployee_kafkaProducerFiresUpdatedEvent_consumerSavesToMongoDB` | Kafka UPDATED event lands in MongoDB |
+| `getEmployeeById_afterUpdate_returnsUpdatedSnapshot` | GET returns latest (UPDATED) snapshot |
+| `deleteEmployee_removedFromPostgres_deletedEventInMongoDB_getReturns404` | DELETE fires DELETED event; GET returns 404 |
+| `createEmployee_invalidEmail_returns400` | Email validation rejects bad format |
+| `createEmployee_zeroSalary_returns400` | Salary validation rejects zero |
+| `createEmployee_nonExistentDepartment_returns404` | Unknown dept ID returns 404 |
+| `deleteDepartment_validId_returns204` | DELETE returns 204 |
+
+### Infrastructure spun up per test run
+
+| Container | Image | Purpose |
+|---|---|---|
+| PostgreSQL | `postgres:16` | Write DB for employees/departments |
+| Kafka | `confluentinc/cp-kafka:7.6.1` | Event broker |
+| Schema Registry | `confluentinc/cp-schema-registry:7.6.1` | Avro schema validation (real, not mock) |
+| MongoDB | `mongo:7` | Event log / read model |
+
+> ⏱ Expect the full suite to take **2–3 minutes** — the Kafka flow tests use `Awaitility` and wait up to 20 seconds for the async consumer to process each event.
