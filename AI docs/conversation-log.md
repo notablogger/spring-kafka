@@ -23,7 +23,7 @@ A chronological record of every prompt, what AI understood, and what it did.
 ## Observations
 
 - AI never asked for clarification when action could be taken directly
-- Every architectural decision (CQRS read split, dropping tests, multi-language plan) was made by the developer — AI executed
+- Every architectural decision (CQRS read split, multi-language plan) was made by the developer — AI executed
 - When tests failed, AI diagnosed iteratively across 3 different approaches before the developer cut scope
 - The standards audit caught 6 real production bugs that would have caused runtime failures
 - The README evolved from technical docs → a learning narrative suitable for a public audience

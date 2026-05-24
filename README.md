@@ -26,7 +26,7 @@ This isn't about the code. It's about the tool.
 - **How specific do prompts need to be?** — Some prompts were one line. Some needed detail. Watching what AI does with each taught me where precision matters.
 - **When does AI decide vs ask?** — AI never asked for clarification when it could act. Understanding that boundary helps you write better prompts.
 - **How does AI handle failure?** — When tests failed, AI diagnosed iteratively. Watching it work through the problem taught me how it reasons.
-- **When do you override AI?** — Every architectural decision (CQRS reads from MongoDB, dropping tests, the multi-language plan) was mine. AI executed. Knowing when to take the wheel is the skill.
+- **When do you override AI?** — Every architectural decision (CQRS reads from MongoDB, the multi-language plan) was mine. AI executed. Knowing when to take the wheel is the skill.
 - **How do you audit AI output?** — Asking "does this follow best practices?" found 6 real bugs. That prompt is now part of my workflow.
 
 📁 The full story is in [`AI docs/`](./AI%20docs/) — every prompt, every response, every decision.
@@ -140,7 +140,7 @@ Each version uses the same REST contract, same Kafka topic, same Avro schema. Th
 |---|---|
 | [`how-ai-helped-me-build-this.md`](./AI%20docs/how-ai-helped-me-build-this.md) | What AI generated, what I decided, and what I actually learned |
 | [`conversation-log.md`](./AI%20docs/conversation-log.md) | Every prompt, what AI understood, what it did |
-| [`prompt-new-language.md`](./AI%20docs/prompt-new-language.md) | Reusable prompt to rebuild in any language + full prompt history |
+| [`prompt-new-language.md`](./AI%20docs/prompt-new-language.md) | Reusable prompt to rebuild in any language |
 
 ---
 

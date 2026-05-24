@@ -29,7 +29,6 @@ When the Testcontainers setup failed, AI tried three different approaches before
 ### When to override it
 Every architectural decision was mine:
 - CQRS reads from MongoDB — my call
-- Dropping tests when they kept failing — my call
 - The multi-language roadmap — my idea
 - Renaming the repo — my decision
 
