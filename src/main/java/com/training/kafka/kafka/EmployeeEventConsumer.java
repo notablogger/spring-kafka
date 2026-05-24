@@ -2,6 +2,7 @@ package com.training.kafka.kafka;
 
 import com.training.kafka.avro.EmployeeEvent;
 import com.training.kafka.entity.EmployeeEventDocument;
+import com.training.kafka.mapstruct.EmployeeEventToDocumentMapper;
 import com.training.kafka.repository.EmployeeEventDocumentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,7 +12,6 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 
 @Slf4j
 @Component
@@ -19,6 +19,7 @@ import java.time.Instant;
 public class EmployeeEventConsumer {
 
     private final EmployeeEventDocumentRepository eventDocumentRepository;
+    private final EmployeeEventToDocumentMapper eventToDocumentMapper;
 
     @KafkaListener(
             topics = "${spring.kafka.topic.employee}",
@@ -40,22 +41,7 @@ public class EmployeeEventConsumer {
                 return;
             }
 
-            // Create MongoDB document from EmployeeEvent
-            EmployeeEventDocument doc = EmployeeEventDocument.builder()
-                    .employeeId(event.getId())
-                    .firstName(event.getFirstName())
-                    .lastName(event.getLastName())
-                    .email(event.getEmail())
-                    .salary(event.getSalary())
-                    .hireDate(event.getHireDate())
-                    .departmentName(event.getDepartment().getName())
-                    .departmentLocation(event.getDepartment().getLocation())
-                    .eventType(eventType)
-                    .eventTimestamp(Instant.ofEpochMilli(event.getEventTimestamp()))
-                    .receivedAt(Instant.now())
-                    .build();
-
-            // Save document to MongoDB
+            EmployeeEventDocument doc = eventToDocumentMapper.toDocument(event);
             eventDocumentRepository.save(doc);
 
             log.info("Saved EmployeeEvent [{}] for employee id={} to MongoDB", eventType, event.getId());
