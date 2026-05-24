@@ -134,7 +134,8 @@ Each version will live in its own folder/branch with the same REST contract and 
 |---|---|
 | [`how-ai-helped-me-build-this.md`](./AI%20docs/how-ai-helped-me-build-this.md) | What AI generated, what I decided, and how I learned |
 | [`conversation-log.md`](./AI%20docs/conversation-log.md) | Full table of every prompt → AI action |
-| [`prompts-to-build-this.md`](./AI%20docs/prompts-to-build-this.md) | The exact prompts you'd need to reproduce this |
+| [`prompts-to-build-this.md`](./AI%20docs/prompts-to-build-this.md) | The exact prompts used to build this project |
+| [`prompt-new-language.md`](./AI%20docs/prompt-new-language.md) | Reusable prompt to rebuild this in any language |
 
 ---
 
