@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "EmployeeEvent",
-  "namespace": "com.nik.kafka.avro",
+  "namespace": "com.training.kafka.avro",
   "fields": [
     { "name": "id",           "type": "long" },
     { "name": "firstName",    "type": "string" },

@@ -5,18 +5,18 @@ services:
   # ─── PostgreSQL ───────────────────────────────────────────────
   postgres:
     image: postgres:16
-    container_name: nik-postgres
+    container_name: training-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: nik_kafka_db
-      POSTGRES_USER: nikuser
-      POSTGRES_PASSWORD: nikpassword
+      POSTGRES_DB: kafka_training_db
+      POSTGRES_USER: traininguser
+      POSTGRES_PASSWORD: trainingpassword
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nikuser -d nik_kafka_db"]
+      test: ["CMD-SHELL", "pg_isready -U traininguser -d kafka_training_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,7 +24,7 @@ services:
   # ─── Confluent Zookeeper ──────────────────────────────────────
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
-    container_name: nik-zookeeper
+    container_name: training-zookeeper
     restart: unless-stopped
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
@@ -40,14 +40,14 @@ services:
   # ─── Confluent Kafka Broker ───────────────────────────────────
   kafka:
     image: confluentinc/cp-kafka:7.6.1
-    container_name: nik-kafka
+    container_name: training-kafka
     restart: unless-stopped
     depends_on:
       zookeeper:
         condition: service_healthy
     ports:
-      - "9092:9092"       # external (host) access
-      - "29092:29092"     # internal (container-to-container) access
+      - "9092:9092"
+      - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -66,7 +66,7 @@ services:
   # ─── Confluent Schema Registry ────────────────────────────────
   schema-registry:
     image: confluentinc/cp-schema-registry:7.6.1
-    container_name: nik-schema-registry
+    container_name: training-schema-registry
     restart: unless-stopped
     depends_on:
       kafka:
@@ -81,7 +81,7 @@ services:
   # ─── Confluent Control Center (Kafka UI) ─────────────────────
   control-center:
     image: confluentinc/cp-enterprise-control-center:7.6.1
-    container_name: nik-control-center
+    container_name: training-control-center
     restart: unless-stopped
     depends_on:
       kafka:
@@ -102,7 +102,7 @@ services:
   # ─── MongoDB ──────────────────────────────────────────────────
   mongodb:
     image: mongo:7
-    container_name: nik-mongodb
+    container_name: training-mongodb
     restart: unless-stopped
     ports:
       - "27017:27017"
@@ -117,7 +117,7 @@ services:
   # ─── Kafka Topic Init ─────────────────────────────────────────
   kafka-init:
     image: confluentinc/cp-kafka:7.6.1
-    container_name: nik-kafka-init
+    container_name: training-kafka-init
     depends_on:
       kafka:
         condition: service_healthy
@@ -133,7 +133,7 @@ services:
   # ─── Schema Registry Init ─────────────────────────────────────
   schema-registry-init:
     image: alpine:3.19
-    container_name: nik-schema-registry-init
+    container_name: training-schema-registry-init
     depends_on:
       schema-registry:
         condition: service_started
@@ -148,7 +148,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nik-kafka-app
+    container_name: java-kafka-ai-app
     restart: unless-stopped
     depends_on:
       postgres:
@@ -160,12 +160,12 @@ services:
     ports:
       - "8080:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/nik_kafka_db
-      SPRING_DATASOURCE_USERNAME: nikuser
-      SPRING_DATASOURCE_PASSWORD: nikpassword
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/kafka_training_db
+      SPRING_DATASOURCE_USERNAME: traininguser
+      SPRING_DATASOURCE_PASSWORD: trainingpassword
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_KAFKA_PROPERTIES_SCHEMA_REGISTRY_URL: http://schema-registry:8081
-      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/nik_kafka_events
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/kafka_training_events
 
 volumes:
   postgres_data:

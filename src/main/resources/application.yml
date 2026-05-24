@@ -1,12 +1,12 @@
 spring:
   application:
-    name: nik-kafka
+    name: java-kafka-ai
 
   # ─── DataSource (PostgreSQL) ──────────────────────────────────
   datasource:
-    url: jdbc:postgresql://localhost:5432/nik_kafka_db
-    username: nikuser
-    password: nikpassword
+    url: jdbc:postgresql://localhost:5432/kafka_training_db
+    username: traininguser
+    password: trainingpassword
     driver-class-name: org.postgresql.Driver
 
   # ─── JPA / Hibernate ─────────────────────────────────────────
@@ -22,7 +22,7 @@ spring:
   # ─── MongoDB ─────────────────────────────────────────────────
   data:
     mongodb:
-      uri: mongodb://localhost:27017/nik_kafka_events
+      uri: mongodb://localhost:27017/kafka_training_events
 
   # ─── Kafka ───────────────────────────────────────────────────
   kafka:
@@ -36,7 +36,7 @@ spring:
       acks: all
       retries: 3
     consumer:
-      group-id: nik-kafka-group
+      group-id: kafka-training-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
