@@ -1,6 +1,6 @@
 package com.nik.kafka.exception;
 
-import org.apache.kafka.common.errors.ResourceNotFoundException;
+import com.nik.kafka.exception.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -45,4 +45,3 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(body);
     }
 }
-
