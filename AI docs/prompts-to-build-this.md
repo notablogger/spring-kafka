@@ -76,6 +76,12 @@ The exact prompts used to build this project from scratch with AI. Concise by de
 
 ---
 
+## 10. Test Refactor — Endpoints Only
+
+> Continue. Also don't get from repo, use only the GET endpoint, I think the tests are redundant.
+
+---
+
 ## Tips for Reproducing This
 
 - **State the stack upfront** — versions matter (Spring Boot 4, Java 21, Kafka 7.6.1)
@@ -84,4 +90,3 @@ The exact prompts used to build this project from scratch with AI. Concise by de
 - **Let AI audit** — asking "does this follow best practices?" catches more bugs than manual review
 - **Make architectural decisions yourself** — tell AI *what* to build, let it decide *how*
 - **Short commands work** — "remove the tests" is enough; AI reads the context
-
