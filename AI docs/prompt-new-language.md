@@ -74,15 +74,3 @@ Copy and paste this prompt to any AI agent to rebuild the same project in a diff
 > Once the language is confirmed, pick the most appropriate libraries/frameworks for that language to fulfil each requirement above.
 
 ---
-
-## How This Project Was Built — Prompt History
-
-These are the exact prompts used to build the Java version from scratch. Use them as a reference for what to expect when building in a new language.
-
-### Tips
-
-- **State the stack upfront** — versions matter
-- **Describe intent, not implementation** — let AI choose how
-- **One concern per prompt** — don't bundle unrelated changes
-- **Let AI audit** — "does this follow best practices?" catches real bugs
-- **Short commands work** — AI reads the context
