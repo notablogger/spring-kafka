@@ -35,9 +35,9 @@ public abstract class BaseIntegrationTest {
     @Container
     static final PostgreSQLContainer<?> postgres =
             new PostgreSQLContainer<>("postgres:16")
-                    .withDatabaseName("nik_kafka_db_test")
-                    .withUsername("nikuser")
-                    .withPassword("nikpassword");
+                    .withDatabaseName("kafka_training_db_test")
+                    .withUsername("traininguser")
+                    .withPassword("trainingpassword");
 
     // ─── Kafka ───────────────────────────────────────────────────
     @Container
@@ -81,6 +81,6 @@ public abstract class BaseIntegrationTest {
 
         // MongoDB
         registry.add("spring.data.mongodb.uri", () ->
-                "mongodb://" + mongodb.getHost() + ":" + mongodb.getMappedPort(27017) + "/nik_kafka_events_test");
+                "mongodb://" + mongodb.getHost() + ":" + mongodb.getMappedPort(27017) + "/kafka_training_events_test");
     }
 }
