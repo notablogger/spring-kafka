@@ -62,6 +62,13 @@ Copy and paste this prompt to any AI agent to rebuild the same project in a diff
 > - All configuration (ports, credentials, topic names) via environment variables or config files — no hardcoded values
 > - Structured logging on producer send (success + failure) and consumer receive
 >
+> **Testing**
+> - Full integration test suite using real containers (no mocks)
+> - Spin up PostgreSQL, Kafka, Schema Registry, and MongoDB as real containers for tests
+> - Test all CRUD endpoints for both Employee and Department
+> - Verify the full Kafka flow — producer fires event, consumer saves to MongoDB, verified via GET endpoints only (no direct DB access in tests)
+> - Test correct HTTP status codes: 201, 204, 400, 404
+> - Test input validation errors return 400
+> - Use Awaitility (or equivalent) to wait for async Kafka consumer to process before asserting
+> 
 > Once the language is confirmed, pick the most appropriate libraries/frameworks for that language to fulfil each requirement above.
-
-
