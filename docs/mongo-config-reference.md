@@ -174,3 +174,170 @@ docker compose up -d
 
 The `-v` flag removes named volumes.
 
+---
+
+## Spring Integration
+
+How MongoDB is wired into Spring Boot — every library class, annotation, and what it does.
+
+### Dependencies (`build.gradle`)
+
+```groovy
+implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
+compileOnly 'org.projectlombok:lombok'
+annotationProcessor 'org.projectlombok:lombok'
+```
+
+| Library | Purpose |
+|---|---|
+| `spring-boot-starter-data-mongodb` | Auto-configures the `MongoClient`, `MongoTemplate`, and Spring Data MongoDB repository support from `application.yml` |
+| `lombok` | Annotation processor that generates boilerplate: getters, setters, constructors, builders |
+
+---
+
+### Document Entity — `EmployeeEventDocument`
+
+```java
+@Document(collection = "employee_events")
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+public class EmployeeEventDocument {
+
+    @Id
+    private String id;
+
+    private Long employeeId;
+    private String firstName;
+    private String lastName;
+    private String email;
+    private BigDecimal salary;
+    private LocalDate hireDate;
+    private String departmentName;
+    private String departmentLocation;
+    private String eventType;
+    private Instant eventTimestamp;
+    private Instant receivedAt;
+}
+```
+
+| Class / Annotation | Package | Purpose |
+|---|---|---|
+| `@Document(collection = "employee_events")` | `org.springframework.data.mongodb.core.mapping` | Marks this class as a MongoDB document and maps it to the `employee_events` collection. Without `collection = ...`, Spring would derive the name from the class name (`employeeEventDocument`) |
+| `@Id` | `org.springframework.data.annotation` | Maps this field to MongoDB's `_id` field. Type is `String` — Spring Data converts between `String` and MongoDB's `ObjectId` automatically |
+| `@Getter @Setter` | `lombok` | Generates all getters and setters at compile time |
+| `@NoArgsConstructor` | `lombok` | Required for Spring Data to instantiate the document when reading from MongoDB |
+| `@AllArgsConstructor` | `lombok` | All-fields constructor |
+| `@Builder` | `lombok` | Fluent builder — used in `EmployeeEventConsumer` to construct documents without chained setters |
+| `BigDecimal` | `java.math` | Exact decimal arithmetic — no floating point rounding. Stored in MongoDB as a `Decimal128` BSON type |
+| `LocalDate` | `java.time` | Calendar date without time or timezone. MongoDB stores it as a UTC midnight `Date` |
+| `Instant` | `java.time` | A point in time in UTC — used for both `eventTimestamp` (when the event was fired) and `receivedAt` (when the consumer saved it). Stored as a BSON `Date` in milliseconds |
+
+---
+
+### Repository — `EmployeeEventDocumentRepository`
+
+```java
+public interface EmployeeEventDocumentRepository extends MongoRepository<EmployeeEventDocument, String> {
+    List<EmployeeEventDocument> findByEmployeeId(Long employeeId);
+    Optional<EmployeeEventDocument> findTopByEmployeeIdOrderByEventTimestampDesc(Long employeeId);
+}
+```
+
+| Class / Annotation | Package | Purpose |
+|---|---|---|
+| `MongoRepository<T, ID>` | `org.springframework.data.mongodb.repository` | MongoDB equivalent of `JpaRepository` — provides `findAll()`, `findById()`, `save()`, `deleteById()` out of the box. `T` = document type, `ID` = `String` (MongoDB `_id`) |
+| `findByEmployeeId(Long)` | Spring Data | Method name query — Spring Data generates `{ employeeId: ? }` as the MongoDB filter |
+| `findTopByEmployeeIdOrderByEventTimestampDesc` | Spring Data | `Top` = limit 1, `OrderByEventTimestampDesc` = sort descending — returns the single most recent event for an employee without loading all events |
+| `Optional<T>` | `java.util` | Forces the caller to handle the case where no document exists for that `employeeId` |
+
+---
+
+### Consumer — `EmployeeEventConsumer`
+
+The consumer is the only writer to MongoDB. It receives the Avro event from Kafka, maps it to an `EmployeeEventDocument`, and saves it.
+
+```java
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class EmployeeEventConsumer {
+
+    private final EmployeeEventDocumentRepository eventDocumentRepository;
+
+    @KafkaListener(
+            topics = "${spring.kafka.topic.employee}",
+            groupId = "${spring.kafka.consumer.group-id}"
+    )
+    public void consume(ConsumerRecord<String, EmployeeEvent> record) {
+        EmployeeEvent event = record.value();
+        if (event == null) { return; }
+
+        EmployeeEventDocument doc = EmployeeEventDocument.builder()
+                .employeeId(event.getId())
+                .salary(event.getSalary())           // BigDecimal — from Avro DecimalConversion
+                .hireDate(event.getHireDate())        // LocalDate — from Avro DateConversion
+                .eventTimestamp(Instant.ofEpochMilli(event.getEventTimestamp()))
+                .receivedAt(Instant.now())            // set at consumer time, not event time
+                .build();
+
+        eventDocumentRepository.save(doc);
+    }
+}
+```
+
+| Class / Method | Package | Purpose |
+|---|---|---|
+| `eventDocumentRepository.save(doc)` | `MongoRepository` | Inserts a new document if `id` is null, updates if it exists. Since `id` is always null here (new document each time), this always inserts — MongoDB is used as an append-only event log |
+| `Instant.ofEpochMilli(long)` | `java.time` | Converts the Avro `eventTimestamp` (stored as `long` milliseconds) back to a proper `Instant` |
+| `Instant.now()` | `java.time` | Captures the exact time the consumer processed the message — separate from when the event was fired, useful for monitoring consumer lag |
+
+---
+
+### Read Path — `EmployeeService` (MongoDB queries)
+
+All GET endpoints resolve current state from the event log at query time:
+
+```java
+@Transactional(readOnly = true)  // keeps Postgres session open for any lazy fields
+public List<EmployeeResponse> getAll() {
+    return latestActiveDocuments().values().stream()
+            .map(this::fromDocument)
+            .toList();
+}
+
+private Map<Long, EmployeeEventDocument> latestActiveDocuments() {
+    return eventDocumentRepository.findAll().stream()
+            .collect(Collectors.toMap(
+                    EmployeeEventDocument::getEmployeeId,
+                    d -> d,
+                    (a, b) -> a.getEventTimestamp().isAfter(b.getEventTimestamp()) ? a : b
+            ))
+            .entrySet().stream()
+            .filter(e -> !"DELETED".equals(e.getValue().getEventType()))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+}
+```
+
+| Class / Method | Package | Purpose |
+|---|---|---|
+| `eventDocumentRepository.findAll()` | `MongoRepository` | Loads all documents from `employee_events` — the merge step below reduces them to one per employee |
+| `Collectors.toMap(..., mergeFunction)` | `java.util.stream` | The merge function `(a, b) -> isAfter ? a : b` keeps only the latest document per `employeeId` when two documents exist for the same employee |
+| `Map.Entry::getKey / getValue` | `java.util` | Method references used after re-streaming the map entries to apply the DELETED filter |
+| `Instant.isAfter(Instant)` | `java.time` | Compares two timestamps — used in the merge function to determine which event is more recent |
+
+---
+
+### In Tests — Testcontainers
+
+```java
+@Container
+static final MongoDBContainer mongodb =
+        new MongoDBContainer("mongo:7");
+
+registry.add("spring.data.mongodb.uri", () ->
+        "mongodb://" + mongodb.getHost() + ":" + mongodb.getMappedPort(27017) + "/kafka_training_events_test");
+```
+
+| Class | Package | Purpose |
+|---|---|---|
+| `MongoDBContainer` | `org.testcontainers.containers` | Starts a real MongoDB 7 Docker container for the test JVM. Port is randomly mapped — `getMappedPort(27017)` returns the actual host port |
+| `@DynamicPropertySource` | `org.springframework.test.context` | Overrides `application.yml` properties at test startup with the container's dynamic host/port — no hardcoded test config needed |

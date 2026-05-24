@@ -204,3 +204,176 @@ spring:
 | `auto-offset-reset` | `earliest` | If no offset exists yet, start from the beginning of the topic |
 | `enable-auto-commit` | `false` | Don't auto-commit offsets — Spring Kafka manages this manually for reliability |
 
+---
+
+## Spring Integration
+
+How Kafka is wired into Spring Boot — every library class, annotation, and what it does.
+
+### Dependencies (`build.gradle`)
+
+```groovy
+implementation 'org.springframework.boot:spring-boot-starter-kafka'
+
+implementation('io.confluent:kafka-avro-serializer:7.6.1') {
+    exclude group: 'io.swagger.core.v3', module: 'swagger-annotations'
+}
+implementation('io.confluent:kafka-schema-registry-client:7.6.1') {
+    exclude group: 'io.swagger.core.v3', module: 'swagger-annotations'
+}
+implementation 'org.apache.avro:avro:1.11.3'
+```
+
+| Library | Purpose |
+|---|---|
+| `spring-boot-starter-kafka` | Auto-configures `KafkaTemplate`, consumer factories, and `@KafkaListener` support from `application.yml` |
+| `kafka-avro-serializer` | Provides `KafkaAvroSerializer` and `KafkaAvroDeserializer` — handles Avro binary encoding with Schema Registry prefix |
+| `kafka-schema-registry-client` | HTTP client used internally by the serialisers to register/fetch schemas from Schema Registry |
+| `avro` | Core Avro library — binary encoding, `SpecificRecord`, logical type conversions |
+
+---
+
+### Topic Creation — `KafkaTopicConfig`
+
+```java
+@Configuration
+public class KafkaTopicConfig {
+
+    @Value("${spring.kafka.topic.employee}")
+    private String employeeTopic;
+
+    @Bean
+    public NewTopic employeeTopic() {
+        return TopicBuilder.name(employeeTopic)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+}
+```
+
+| Class / Annotation | Package | Purpose |
+|---|---|---|
+| `@Configuration` | `org.springframework.context.annotation` | Marks this as a Spring config class — `@Bean` methods are processed at startup |
+| `@Value` | `org.springframework.beans.factory.annotation` | Injects the topic name from `application.yml` so it's not hardcoded |
+| `@Bean` | `org.springframework.context.annotation` | Registers the return value as a Spring-managed bean |
+| `NewTopic` | `org.apache.kafka.clients.admin` | Kafka Admin API object — tells Spring to create this topic if it doesn't already exist on the broker |
+| `TopicBuilder` | `org.springframework.kafka.config` | Fluent builder for `NewTopic` — cleaner than constructing `NewTopic` directly |
+
+---
+
+### Producer — `EmployeeEventProducer`
+
+```java
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class EmployeeEventProducer {
+
+    private final KafkaTemplate<String, EmployeeEvent> kafkaTemplate;
+    private final EmployeeToEventMapper employeeToEventMapper;
+
+    @Value("${spring.kafka.topic.employee}")
+    private String employeeTopic;
+
+    private void sendEvent(Employee employee, String eventType) {
+        EmployeeEvent event = employeeToEventMapper.toEvent(employee, eventType);
+
+        Message<EmployeeEvent> message = MessageBuilder
+                .withPayload(event)
+                .setHeader(KafkaHeaders.TOPIC, employeeTopic)
+                .setHeader(KafkaHeaders.KEY, String.valueOf(employee.getId()))
+                .setHeader("eventType", eventType)
+                .build();
+
+        CompletableFuture<SendResult<String, EmployeeEvent>> future = kafkaTemplate.send(message);
+
+        future.whenComplete((result, ex) -> {
+            if (ex != null) {
+                log.error("Failed to send EmployeeEvent [{}] for employee id={}: {}", ...);
+            } else {
+                log.info("EmployeeEvent [{}] sent → topic={}, partition={}, offset={}", ...);
+            }
+        });
+    }
+}
+```
+
+| Class / Annotation | Package | Purpose |
+|---|---|---|
+| `@Slf4j` | `lombok` | Generates a `private static final Logger log` field — no boilerplate logging setup |
+| `@Component` | `org.springframework.stereotype` | Registers this class as a Spring bean — injectable anywhere |
+| `@RequiredArgsConstructor` | `lombok` | Generates a constructor for all `final` fields — Spring uses it for dependency injection |
+| `@Value` | `org.springframework.beans.factory.annotation` | Injects the topic name from config |
+| `KafkaTemplate<K, V>` | `org.springframework.kafka.core` | The central Spring Kafka class for sending messages. Auto-configured by Spring Boot from `application.yml`. `K` = key type (`String`), `V` = value type (`EmployeeEvent`) |
+| `MessageBuilder` | `org.springframework.messaging.support` | Fluent builder to construct a `Message<T>` with payload + headers — used instead of `ProducerRecord` when sending via Spring's messaging abstraction |
+| `KafkaHeaders` | `org.springframework.kafka.support` | Constants for standard Kafka message headers — `KafkaHeaders.TOPIC`, `KafkaHeaders.KEY` etc. Avoids magic strings |
+| `Message<T>` | `org.springframework.messaging` | Spring's generic message wrapper — payload + headers. `KafkaTemplate.send(Message)` extracts topic, key, and headers automatically |
+| `CompletableFuture<SendResult<K,V>>` | `java.util.concurrent` / `org.springframework.kafka.support` | `kafkaTemplate.send()` returns this — non-blocking. The send happens async; `.whenComplete()` fires the callback on success or failure |
+| `SendResult<K, V>` | `org.springframework.kafka.support` | Wraps the Kafka `RecordMetadata` — gives you topic, partition, offset of the sent message |
+
+---
+
+### MapStruct Mapper — `EmployeeToEventMapper`
+
+Sits between the service and the producer — converts a JPA `Employee` entity into an Avro `EmployeeEvent`.
+
+```java
+@Mapper(
+        componentModel = "spring",
+        imports = {EventType.class, Instant.class}
+)
+public interface EmployeeToEventMapper {
+
+    @Mapping(target = "department",     expression = "java(mapDepartment(employee))")
+    @Mapping(target = "eventType",      expression = "java(EventType.valueOf(eventType))")
+    @Mapping(target = "eventTimestamp", expression = "java(Instant.now().toEpochMilli())")
+    @Mapping(target = "departmentBuilder", ignore = true)
+    EmployeeEvent toEvent(Employee employee, @Context String eventType);
+
+    default DepartmentInfo mapDepartment(Employee employee) {
+        return DepartmentInfo.newBuilder()
+                .setId(employee.getDepartment().getId())
+                .setName(employee.getDepartment().getName())
+                .setLocation(employee.getDepartment().getLocation())
+                .build();
+    }
+}
+```
+
+| Class / Annotation | Package | Purpose |
+|---|---|---|
+| `@Mapper` | `org.mapstruct` | Marks this interface as a MapStruct mapper. At compile time, MapStruct generates an implementation class. `componentModel = "spring"` makes the generated impl a `@Component` — injectable via `@RequiredArgsConstructor` |
+| `@Mapping` | `org.mapstruct` | Declares how a specific target field is populated. `source` maps by name, `expression` runs inline Java, `ignore = true` skips the field |
+| `@Context` | `org.mapstruct` | Passes `eventType` as extra context to the mapping method — not a source field, just a parameter available to expressions and helper methods |
+| `imports` in `@Mapper` | `org.mapstruct` | Makes `EventType` and `Instant` available inside `expression = "java(...)"` strings without fully-qualified names |
+
+Why MapStruct over manual mapping: the `Employee` → `EmployeeEvent` conversion involves a nested record (`DepartmentInfo`), an enum conversion (`EventType.valueOf`), and a timestamp calculation. MapStruct keeps this declarative and generates null-safe, compile-checked code.
+
+---
+
+### Consumer — `EmployeeEventConsumer`
+
+```java
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class EmployeeEventConsumer {
+
+    @KafkaListener(
+            topics = "${spring.kafka.topic.employee}",
+            groupId = "${spring.kafka.consumer.group-id}"
+    )
+    public void consume(ConsumerRecord<String, EmployeeEvent> record) {
+        Header header = record.headers().lastHeader("eventType");
+        EmployeeEvent event = record.value();
+        // ...
+    }
+}
+```
+
+| Class / Annotation | Package | Purpose |
+|---|---|---|
+| `@KafkaListener` | `org.springframework.kafka.annotation` | Marks this method as a Kafka consumer. Spring creates a `KafkaMessageListenerContainer` that polls the topic and invokes this method for each record. Topic and group-id are resolved from `application.yml` |
+| `ConsumerRecord<K, V>` | `org.apache.kafka.clients.consumer` | Raw Kafka record — gives access to the deserialized key and value, topic, partition, offset, and headers. `V = EmployeeEvent` because `specific.avro.reader: true` is set |
+| `Header` | `org.apache.kafka.common.header` | Represents a single Kafka message header — raw `byte[]` value. Used to extract `eventType` without deserialising the Avro payload |

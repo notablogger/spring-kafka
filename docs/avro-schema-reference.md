@@ -231,49 +231,68 @@ Three things are needed: the Avro library, the Confluent serialisers, and the Av
 
 ```groovy
 plugins {
-    id 'com.github.davidmc24.gradle.plugin.avro' version '1.9.1'  // generates Java from .avsc
+    id 'com.github.davidmc24.gradle.plugin.avro' version '1.9.1'
 }
 
 repositories {
     mavenCentral()
-    maven { url 'https://packages.confluent.io/maven/' }  // required — Confluent isn't on Maven Central
+    maven { url 'https://packages.confluent.io/maven/' }
 }
 
 dependencies {
     implementation 'org.apache.avro:avro:1.11.3'
 
-    // Confluent Avro serialiser/deserialiser + Schema Registry client
     implementation('io.confluent:kafka-avro-serializer:7.6.1') {
-        exclude group: 'io.swagger.core.v3', module: 'swagger-annotations'  // avoids Swagger version conflict
+        exclude group: 'io.swagger.core.v3', module: 'swagger-annotations'
     }
     implementation('io.confluent:kafka-schema-registry-client:7.6.1') {
         exclude group: 'io.swagger.core.v3', module: 'swagger-annotations'
     }
 }
 
-// Tell Avro plugin to generate String (not CharSequence) and keep fields private
 avro {
     stringType = 'String'
     fieldVisibility = 'PRIVATE'
 }
 
-// Add generated sources to the compile path
 sourceSets.main.java.srcDirs += ["$buildDir/generated-main-avro-java"]
 ```
 
-The `exclude` blocks are important — `kafka-avro-serializer` transitively pulls in an older `swagger-annotations` that conflicts with SpringDoc. Without them, the build fails.
+| Library / Plugin | Purpose |
+|---|---|
+| `com.github.davidmc24.gradle.plugin.avro` | Gradle plugin — watches `src/main/avro/*.avsc` and generates Java classes into `build/generated-main-avro-java` at compile time |
+| `org.apache.avro:avro` | Core Avro library — binary encoding/decoding, `SpecificRecord` base class, logical type conversions (`DecimalConversion`, `DateConversion`) |
+| `io.confluent:kafka-avro-serializer` | Provides `KafkaAvroSerializer` and `KafkaAvroDeserializer` — prepends the 5-byte Schema Registry magic byte + schema ID before the Avro binary payload |
+| `io.confluent:kafka-schema-registry-client` | HTTP client used internally by the serialisers to POST schemas to and GET schemas from the Schema Registry REST API |
+| Confluent Maven repo | Confluent artifacts are not published to Maven Central — this repo must be declared or the build fails to resolve them |
+| `stringType = 'String'` | Tells the plugin to generate `String` fields instead of `CharSequence` — avoids having to call `.toString()` everywhere |
+| `fieldVisibility = 'PRIVATE'` | Generated fields are `private` with getters/setters — instead of Avro's default `public` fields |
+| `exclude swagger-annotations` | `kafka-avro-serializer` transitively pulls in an older `swagger-annotations` that conflicts with SpringDoc 3.x. The `exclude` prevents the version clash that would otherwise break the build |
 
 ---
 
-### 2. `application.yml` — Wiring Avro into Spring Kafka
+### 2. Generated Classes
+
+| Class | Package | Purpose |
+|---|---|---|
+| `EmployeeEvent` | `com.training.kafka.avro` | Generated from `message.avsc` — implements `SpecificRecord`. Never edit directly; re-generated on every `./gradlew build` |
+| `DepartmentInfo` | `com.training.kafka.avro` | Nested record — generated as a separate class even though it's defined inline in the schema |
+| `EventType` | `com.training.kafka.avro` | Generated Java enum — values are `CREATED`, `UPDATED`, `DELETED` exactly as declared in the schema `symbols` array |
+| `SpecificRecordBase` | `org.apache.avro.specific` | Base class all generated records extend — implements the `SpecificRecord` interface that Avro serialisers require |
+| `DecimalConversion` | `org.apache.avro.Conversions` | Registered in the generated class's static initialiser — converts between Avro `bytes` wire format and Java `BigDecimal`. Without this, salary would be a raw `ByteBuffer` |
+| `DateConversion` | `org.apache.avro.data.TimeConversions` | Registered in the generated class's static initialiser — converts between Avro `int` (days since epoch) and Java `LocalDate`. Without this, hireDate would be a raw `int` |
+
+---
+
+### 3. `application.yml` — Wiring Avro into Spring Kafka
 
 ```yaml
 spring:
   kafka:
     bootstrap-servers: kafka:29092
     properties:
-      schema.registry.url: http://schema-registry:8081  # shared by producer and consumer
-      specific.avro.reader: true                         # deserialise into EmployeeEvent, not GenericRecord
+      schema.registry.url: http://schema-registry:8081
+      specific.avro.reader: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
@@ -282,76 +301,97 @@ spring:
       value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
 ```
 
-| Setting | Why it matters |
-|---|---|
-| `schema.registry.url` | Both producer and consumer use this — producer to register the schema, consumer to fetch it for deserialisation |
-| `specific.avro.reader: true` | Without this, the consumer gets a `GenericRecord` (basically a map). With it, you get a strongly typed `EmployeeEvent` object |
-| `KafkaAvroSerializer` | Writes a 5-byte Schema Registry prefix (magic byte + schema ID) before the Avro binary payload |
-| `KafkaAvroDeserializer` | Reads that prefix, fetches the schema by ID from Schema Registry, then deserialises the bytes into `EmployeeEvent` |
+| Setting | Class / Value | Purpose |
+|---|---|---|
+| `schema.registry.url` | URL string | Shared by both producer and consumer — producer uses it to register the schema on first send, consumer uses it to fetch the schema by ID when deserialising |
+| `specific.avro.reader: true` | `boolean` | Without this, `KafkaAvroDeserializer` returns a `GenericRecord` (a map-like object). With it, deserialisation produces a strongly typed `EmployeeEvent` instance |
+| `KafkaAvroSerializer` | `io.confluent.kafka.serializers` | Serialiser for the message value — looks up or registers the schema, then encodes the `EmployeeEvent` as Avro binary with a 5-byte prefix |
+| `KafkaAvroDeserializer` | `io.confluent.kafka.serializers` | Deserialiser — reads the 5-byte prefix, fetches the schema by ID from Schema Registry, then decodes bytes into `EmployeeEvent` |
+| `StringSerializer` | `org.apache.kafka.common.serialization` | Serialises the message key (employee ID as string) to bytes |
+| `StringDeserializer` | `org.apache.kafka.common.serialization` | Deserialises the message key bytes back to `String` |
 
 ---
 
-### 3. Producer
-
-`KafkaTemplate<String, EmployeeEvent>` is all that's needed — Spring auto-configures it from `application.yml`. The key is a `String` (employee ID), the value is the generated `EmployeeEvent` Avro object.
+### 4. Producer — `EmployeeEventProducer`
 
 ```java
 @Slf4j
-@Service
+@Component
 @RequiredArgsConstructor
 public class EmployeeEventProducer {
 
     private final KafkaTemplate<String, EmployeeEvent> kafkaTemplate;
+    private final EmployeeToEventMapper employeeToEventMapper;
 
     @Value("${spring.kafka.topic.employee}")
-    private String topic;
+    private String employeeTopic;
 
-    public void send(Employee employee, String eventType) {
-        EmployeeEvent event = EmployeeEvent.newBuilder()
-                .setId(employee.getId())
-                .setFirstName(employee.getFirstName())
-                .setLastName(employee.getLastName())
-                .setEmail(employee.getEmail())
-                .setSalary(employee.getSalary())
-                .setHireDate(employee.getHireDate())
-                .setDepartment(DepartmentInfo.newBuilder()
-                        .setId(employee.getDepartment().getId())
-                        .setName(employee.getDepartment().getName())
-                        .setLocation(employee.getDepartment().getLocation())
-                        .build())
-                .setEventType(EventType.valueOf(eventType))
-                .setEventTimestamp(Instant.now().toEpochMilli())
+    private void sendEvent(Employee employee, String eventType) {
+        EmployeeEvent event = employeeToEventMapper.toEvent(employee, eventType);
+
+        Message<EmployeeEvent> message = MessageBuilder
+                .withPayload(event)
+                .setHeader(KafkaHeaders.TOPIC, employeeTopic)
+                .setHeader(KafkaHeaders.KEY, String.valueOf(employee.getId()))
+                .setHeader("eventType", eventType)
                 .build();
 
-        // Attach eventType as a message header so consumers can route without deserialising
-        ProducerRecord<String, EmployeeEvent> record = new ProducerRecord<>(topic, String.valueOf(employee.getId()), event);
-        record.headers().add("eventType", eventType.getBytes(StandardCharsets.UTF_8));
-
-        kafkaTemplate.send(record).whenComplete((result, ex) -> {
-            if (ex != null) {
-                log.error("Failed to send EmployeeEvent [{}] for employee id={}: {}", eventType, employee.getId(), ex.getMessage());
-            } else {
-                log.info("EmployeeEvent [{}] sent → topic={}, partition={}, offset={}",
-                        eventType,
-                        result.getRecordMetadata().topic(),
-                        result.getRecordMetadata().partition(),
-                        result.getRecordMetadata().offset());
-            }
-        });
+        CompletableFuture<SendResult<String, EmployeeEvent>> future = kafkaTemplate.send(message);
+        future.whenComplete((result, ex) -> { ... });
     }
 }
 ```
 
-Key points:
-- **Builder pattern** — the generated `EmployeeEvent.newBuilder()` is the correct way to construct Avro records. Don't use `new EmployeeEvent(...)` directly.
-- **`whenComplete`** — non-blocking. The send is async; the callback fires on success or failure without blocking the HTTP thread.
-- **Message header** — `eventType` is added as a raw byte header. This lets consumers inspect the event type without deserialising the full Avro payload.
+| Class / Annotation | Package | Purpose |
+|---|---|---|
+| `@Slf4j` | `lombok` | Generates `private static final Logger log` — no manual logger setup |
+| `@Component` | `org.springframework.stereotype` | Registers this as a Spring bean — injectable via constructor |
+| `@RequiredArgsConstructor` | `lombok` | Generates a constructor for all `final` fields — Spring uses it for dependency injection |
+| `@Value` | `org.springframework.beans.factory.annotation` | Injects the topic name from `application.yml` — avoids hardcoding |
+| `KafkaTemplate<K, V>` | `org.springframework.kafka.core` | Central Spring Kafka class for sending messages. Auto-configured by Spring Boot. Generic types: `K` = key (`String`), `V` = value (`EmployeeEvent`) |
+| `MessageBuilder` | `org.springframework.messaging.support` | Fluent builder for `Message<T>` — sets payload and headers in one chain. Preferred over constructing `ProducerRecord` directly when using Spring's messaging abstraction |
+| `KafkaHeaders` | `org.springframework.kafka.support` | Constants for Kafka-specific header keys (`TOPIC`, `KEY`) — avoids magic strings |
+| `Message<T>` | `org.springframework.messaging` | Spring's generic message envelope — `KafkaTemplate.send(Message)` extracts topic, key, and custom headers automatically |
+| `CompletableFuture<SendResult<K,V>>` | `java.util.concurrent` | Returned by `kafkaTemplate.send()` — non-blocking. The HTTP request thread is not blocked waiting for Kafka to acknowledge |
+| `SendResult<K, V>` | `org.springframework.kafka.support` | Available in the `whenComplete` callback — wraps `RecordMetadata` giving you the topic, partition, and offset of the sent message |
 
 ---
 
-### 4. Consumer
+### 5. MapStruct Mapper — `EmployeeToEventMapper`
 
-`@KafkaListener` with `ConsumerRecord<String, EmployeeEvent>` — Spring injects the fully deserialised `EmployeeEvent` object because `specific.avro.reader: true` is set.
+```java
+@Mapper(componentModel = "spring", imports = {EventType.class, Instant.class})
+public interface EmployeeToEventMapper {
+
+    @Mapping(target = "department",     expression = "java(mapDepartment(employee))")
+    @Mapping(target = "eventType",      expression = "java(EventType.valueOf(eventType))")
+    @Mapping(target = "eventTimestamp", expression = "java(Instant.now().toEpochMilli())")
+    @Mapping(target = "departmentBuilder", ignore = true)
+    EmployeeEvent toEvent(Employee employee, @Context String eventType);
+
+    default DepartmentInfo mapDepartment(Employee employee) {
+        return DepartmentInfo.newBuilder()
+                .setId(employee.getDepartment().getId())
+                .setName(employee.getDepartment().getName())
+                .setLocation(employee.getDepartment().getLocation())
+                .build();
+    }
+}
+```
+
+| Class / Annotation | Package | Purpose |
+|---|---|---|
+| `@Mapper(componentModel = "spring")` | `org.mapstruct` | Tells MapStruct to generate an implementation of this interface at compile time and annotate it with `@Component` — making it injectable like any other Spring bean |
+| `@Mapping(target, source)` | `org.mapstruct` | Maps a specific target field from a source field by name |
+| `@Mapping(target, expression)` | `org.mapstruct` | Runs arbitrary Java inline — used for `eventType` (enum conversion) and `eventTimestamp` (current time). The `imports` in `@Mapper` make `EventType` and `Instant` available without full package names |
+| `@Mapping(target, ignore = true)` | `org.mapstruct` | Skips `departmentBuilder` — a helper field in the generated Avro class that MapStruct would otherwise try to populate and fail |
+| `@Context` | `org.mapstruct` | Passes `eventType` as a parameter available to expressions and default methods — it's not a field on the source object, just extra input to the mapping |
+| `EmployeeEvent.newBuilder()` | `org.apache.avro.specific` | The correct way to construct Avro records — the builder validates required fields and handles the `SpecificRecord` internals. Using `new EmployeeEvent(...)` directly bypasses this and can cause runtime errors |
+| `DepartmentInfo.newBuilder()` | `org.apache.avro.specific` | Same pattern for the nested record |
+
+---
+
+### 6. Consumer — `EmployeeEventConsumer`
 
 ```java
 @Slf4j
@@ -366,41 +406,50 @@ public class EmployeeEventConsumer {
             groupId = "${spring.kafka.consumer.group-id}"
     )
     public void consume(ConsumerRecord<String, EmployeeEvent> record) {
-        // Read eventType from header — avoids deserialising payload just to check type
-        String eventType = "UNKNOWN";
         Header header = record.headers().lastHeader("eventType");
-        if (header != null) {
-            eventType = new String(header.value(), StandardCharsets.UTF_8);
-        }
-
         EmployeeEvent event = record.value();
-        if (event == null) {
-            log.warn("Received null payload — skipping. topic={} partition={} offset={}",
-                    record.topic(), record.partition(), record.offset());
-            return;
-        }
-
-        // Map Avro event → MongoDB document
-        EmployeeEventDocument doc = EmployeeEventDocument.builder()
-                .employeeId(event.getId())
-                .firstName(event.getFirstName())
-                .salary(event.getSalary())           // BigDecimal — no conversion needed
-                .hireDate(event.getHireDate())        // LocalDate — no conversion needed
-                .departmentName(event.getDepartment().getName())
-                .eventType(eventType)
-                .eventTimestamp(Instant.ofEpochMilli(event.getEventTimestamp()))
-                .receivedAt(Instant.now())
-                .build();
-
-        eventDocumentRepository.save(doc);
-        log.info("Saved EmployeeEvent [{}] for employee id={} to MongoDB", eventType, event.getId());
+        if (event == null) { return; }
+        // map and save to MongoDB
     }
 }
 ```
 
-Key points:
-- **`ConsumerRecord<String, EmployeeEvent>`** — the generic type must match. If `specific.avro.reader` is false, this would be `ConsumerRecord<String, Object>` and you'd need to cast.
-- **`event.getSalary()` returns `BigDecimal` directly** — the `DecimalConversion` registered in the generated class handles the bytes → BigDecimal conversion transparently.
-- **`event.getHireDate()` returns `LocalDate` directly** — same reason; `DateConversion` is registered automatically.
-- **Null guard on `event`** — a tombstone message (key with null value) is valid Kafka — always guard against it.
-- **`enable-auto-commit: false`** — Spring Kafka commits the offset only after the listener method returns successfully. If `save()` throws, the offset is not committed and the message is retried.
+| Class / Annotation | Package | Purpose |
+|---|---|---|
+| `@KafkaListener` | `org.springframework.kafka.annotation` | Marks this method as a Kafka consumer. Spring creates a `KafkaMessageListenerContainer` behind the scenes that polls the topic on a background thread and invokes this method for each record |
+| `ConsumerRecord<K, V>` | `org.apache.kafka.clients.consumer` | Raw Kafka record — exposes key, value, topic, partition, offset, timestamp, and headers. `V = EmployeeEvent` because `specific.avro.reader: true` tells `KafkaAvroDeserializer` to produce the generated class |
+| `Header` | `org.apache.kafka.common.header` | A single Kafka header — name + raw `byte[]` value. Used to read `eventType` without deserialising the Avro payload |
+| `record.headers().lastHeader("eventType")` | `org.apache.kafka.common.header.Headers` | Retrieves the most recent header with this key — `lastHeader` is used instead of `headers` in case the header was set multiple times |
+
+---
+
+### 7. In Tests — Testcontainers for Schema Registry
+
+The Kafka and Schema Registry containers require extra wiring compared to Postgres and MongoDB:
+
+```java
+@Container
+static final KafkaContainer kafka =
+        new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.1"));
+
+@Container
+static final GenericContainer<?> schemaRegistry =
+        new GenericContainer<>(DockerImageName.parse("confluentinc/cp-schema-registry:7.6.1"))
+                .withNetwork(network)
+                .withEnv("SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS", "PLAINTEXT://kafka:29092")
+                .withExposedPorts(8081)
+                .dependsOn(kafka);
+
+registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+registry.add("spring.kafka.properties.schema.registry.url", () ->
+        "http://" + schemaRegistry.getHost() + ":" + schemaRegistry.getMappedPort(8081));
+```
+
+| Class | Package | Purpose |
+|---|---|---|
+| `KafkaContainer` | `org.testcontainers.containers` | Starts a real Confluent Kafka Docker container. `getBootstrapServers()` returns the dynamically mapped host:port |
+| `GenericContainer<?>` | `org.testcontainers.containers` | Used for Schema Registry since Testcontainers has no dedicated Schema Registry container class — `withEnv` and `withExposedPorts` configure it manually |
+| `DockerImageName.parse(...)` | `org.testcontainers.utility` | Type-safe image name — Testcontainers validates the format before pulling |
+| `Network` | `org.testcontainers.containers` | Shared Docker network — Schema Registry needs to reach Kafka by container name, which requires both to be on the same Docker network |
+| `@DynamicPropertySource` | `org.springframework.test.context` | Overrides `application.yml` at test startup with container-provided URLs — no hardcoded test config |
+| `getMappedPort(8081)` | `org.testcontainers.containers` | Returns the actual host port that Docker mapped to container port 8081 — different each test run |
