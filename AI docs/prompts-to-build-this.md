@@ -27,7 +27,7 @@ The exact prompts used to build this project from scratch with AI. Concise by de
 
 ## 3. Architectural Change — Reads from MongoDB
 
-> Remove the tests, lets focus on the controller. GET should happen from Mongo.
+> GET should happen from Mongo.
 
 ---
 
