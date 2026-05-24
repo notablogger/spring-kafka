@@ -144,6 +144,19 @@ Each version uses the same REST contract, same Kafka topic, same Avro schema. Th
 
 ---
 
+## 📖 Technical Reference Docs
+
+Deep-dive docs on every infrastructure component and the Avro schema — written for anyone who wants to understand *why* things are configured the way they are, not just what they are.
+
+| File | What's inside |
+|---|---|
+| [`docs/avro-schema-reference.md`](./docs/avro-schema-reference.md) | Full schema breakdown — why `decimal` not `float`, why `date` not `string`, why department is a nested record, code generation pipeline, schema evolution |
+| [`docs/kafka-config-reference.md`](./docs/kafka-config-reference.md) | Every Kafka service explained — broker, Zookeeper, Schema Registry, Control Center, the two-listener pattern, startup order |
+| [`docs/mongo-config-reference.md`](./docs/mongo-config-reference.md) | MongoDB setup, the `employee_events` collection schema, read path logic, how DELETED employees are filtered |
+| [`docs/postgres-config-reference.md`](./docs/postgres-config-reference.md) | Postgres setup, JPA/Hibernate settings, entity schema, `LazyInitializationException` — what it is and how it was fixed |
+
+---
+
 ## 💡 Key Technical Decisions
 
 - **GET from MongoDB** — reads from the event log. Latest non-deleted snapshot per employee, including `eventType` and `eventTimestamp`

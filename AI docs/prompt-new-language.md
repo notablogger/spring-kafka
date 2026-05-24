@@ -72,5 +72,14 @@ Copy and paste this prompt to any AI agent to rebuild the same project in a diff
 > - Use Awaitility (or equivalent) to wait for async Kafka consumer to process before asserting
 > 
 > Once the language is confirmed, pick the most appropriate libraries/frameworks for that language to fulfil each requirement above.
-
----
+>
+> **Documentation**
+> After the project is built, generate the following reference docs inside a `docs/` folder:
+>
+> - `kafka-config-reference.md` — document every Kafka-related Docker Compose service (Zookeeper, Kafka broker, Schema Registry, Control Center, kafka-init, schema-registry-init) and every setting in the `kafka` section of the app config. For each setting, include: the config key, its value, and a plain-English explanation of what it does. Also include a startup order diagram and an explanation of the two-listener pattern.
+>
+> - `mongo-config-reference.md` — document the MongoDB Docker Compose service and the `spring.data.mongodb` app config. Include: the collection schema (all fields, their types, and where they come from), the read path logic (how the latest event snapshot is derived and how DELETED employees are excluded), the Java entity and repository setup, and how to wipe data for a clean run.
+>
+> - `postgres-config-reference.md` — document the PostgreSQL Docker Compose service and the `spring.datasource` / `spring.jpa` app config. Include: the database name, credentials, JPA/Hibernate settings (ddl-auto, dialect, show-sql), and the role Postgres plays in the write path.
+>
+> - `avro-schema-reference.md` — document the Avro schema file (`.avsc`). Include: a field-by-field breakdown with the Avro type, the generated Java type, and why that type was chosen. Explain the three non-obvious choices in depth: why `decimal` logical type is used for salary (not float/double), why `date` logical type is used for hireDate (not string), and why department is a nested record (event-carried state transfer pattern). Also cover: how code generation works (the `.avsc` → generated Java classes pipeline), how schema registration works at startup, and a section on schema evolution with a compatibility table.
