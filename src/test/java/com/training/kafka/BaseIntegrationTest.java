@@ -8,6 +8,8 @@ import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.Network;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
@@ -31,6 +33,9 @@ import org.testcontainers.utility.DockerImageName;
 @DirtiesContext
 public abstract class BaseIntegrationTest {
 
+    // ─── Shared Docker network (so Schema Registry can reach Kafka) ──
+    static final Network network = Network.newNetwork();
+
     // ─── PostgreSQL ──────────────────────────────────────────────
     @Container
     static final PostgreSQLContainer<?> postgres =
@@ -42,19 +47,20 @@ public abstract class BaseIntegrationTest {
     // ─── Kafka ───────────────────────────────────────────────────
     @Container
     static final KafkaContainer kafka =
-            new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.1"));
+            new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.1"))
+                    .withNetwork(network)
+                    .withNetworkAliases("kafka");
 
     // ─── Schema Registry ─────────────────────────────────────────
-    // Uses cp-schema-registry pointed at the Kafka container bootstrap servers.
-    // Started after Kafka via withEnv — Testcontainers handles ordering.
     @Container
     static final GenericContainer<?> schemaRegistry =
             new GenericContainer<>("confluentinc/cp-schema-registry:7.6.1")
+                    .withNetwork(network)
                     .withExposedPorts(8081)
                     .withEnv("SCHEMA_REGISTRY_HOST_NAME", "schema-registry")
-                    .withEnv("SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS",
-                            "PLAINTEXT://" + kafka.getNetworkAliases().get(0) + ":9092")
+                    .withEnv("SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS", "PLAINTEXT://kafka:9092")
                     .withEnv("SCHEMA_REGISTRY_LISTENERS", "http://0.0.0.0:8081")
+                    .waitingFor(Wait.forHttp("/subjects").forStatusCode(200))
                     .dependsOn(kafka);
 
     // ─── MongoDB ─────────────────────────────────────────────────
