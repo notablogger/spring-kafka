@@ -402,6 +402,7 @@ class IntegrationTest extends BaseIntegrationTest {
     @Test
     @Order(30)
     void deleteDepartment_validId_returns204() {
+        // Create a fresh dept with no employees to safely delete
         DepartmentResponse dept = restClient.post()
                 .uri("/api/departments")
                 .contentType(MediaType.APPLICATION_JSON)

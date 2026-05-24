@@ -1,68 +1,78 @@
 # How AI Helped Me Build This
 
-This project was built through conversation with GitHub Copilot inside JetBrains IDE. No boilerplate was written by hand. But more importantly — **I learned by doing it this way, not despite it**.
+This project wasn't built to learn Kafka. **It was built to learn AI** — how it thinks, how it responds, and how to actually get production-quality work done through conversation alone. Kafka and the multi-language roadmap are the vehicle.
 
 ---
 
-## The Learning Philosophy
+## The Real Goal
 
-Using AI to build doesn't mean you skip the learning. It means you spend your time on **architecture decisions, debugging, and understanding** — not on remembering annotations or fighting Maven dependency trees.
+Most AI usage I see is autocomplete — tab to accept a suggestion. I wanted to go further: can I have a genuine engineering conversation with an AI agent and come out the other end with something that works, is well-structured, and follows real standards?
 
-Every piece of code AI generated, I read, questioned, and understood before moving on. When something broke, I didn't just paste the error — I diagnosed it first, then used AI to confirm or correct my thinking.
+The answer is yes. But the skill isn't in the prompting — it's in **knowing when to trust it, when to override it, and how to read what it gives you**.
+
+---
+
+## What I Learned About AI
+
+### How it interprets prompts
+Some prompts in this project were one sentence. Some were detailed. The difference in output quality taught me where precision actually matters:
+- **Vague prompts work for scaffolding** — "build an event-driven app with Kafka, Postgres, MongoDB" produced a complete, working structure
+- **Precision matters for behaviour** — "GET should happen from Mongo" was enough; AI understood the architectural intent without needing implementation detail
+- **Short commands work in context** — "remove the tests" was all it took because AI had read the whole codebase
+
+### When AI decides vs asks
+AI never asked for clarification when it could take action. It acted first, then explained. This is useful once you understand the pattern — if you want AI to ask, you have to explicitly say so.
+
+### How AI handles failure
+When the Testcontainers setup failed, AI tried three different approaches before I cut scope. Watching it work through the problem — changing the MongoDB URI strategy each time — showed me how it reasons iteratively rather than in one shot.
+
+### When to override it
+Every architectural decision was mine:
+- CQRS reads from MongoDB — my call
+- Dropping tests when they kept failing — my call
+- The multi-language roadmap — my idea
+- Renaming the repo — my decision
+
+AI executed all of them without question. **Knowing when to take the wheel is the actual skill.**
+
+### How to audit AI output
+Asking "does this follow best practices?" found 6 real bugs that would have caused production failures — wrong Kafka port, missing validation, lazy loading crash, wrong dependency names. That single prompt is now a permanent part of my workflow.
 
 ---
 
 ## What AI Generated
 
-### Project Scaffold
-The entire `build.gradle`, package structure, Docker Compose, and `application.yml` were generated from a single high-level description. This saved ~2 hours of setup and let me go straight to learning the actual patterns.
-
-### Domain Model
-AI designed `Employee`, `Department`, and `EmployeeEventDocument` entities — including JPA annotations, Lombok, MongoDB document mappings, and the relationship between them.
-
-### Avro Schema
-`message.avsc` was generated with correct Avro logical types:
-- `decimal` for salary (with precision/scale)
-- `date` for hire date
-- Nested `DepartmentInfo` record
-- `EventType` enum
-
-This taught me how Avro logical types map to Java types — something that takes hours to figure out from docs alone.
-
-### Kafka Producer & Consumer
-`EmployeeEventProducer` and `EmployeeEventConsumer` were fully generated with:
-- Kafka message headers for `eventType`
-- `CompletableFuture`-based async send with logging callbacks
-- Consumer extracting headers and persisting to MongoDB
-
-### MapStruct Mapper
-`EmployeeToEventMapper` was generated with `@Context` for passing the event type, expression mappings for `EventType.valueOf()` and `Instant.now()`, and the nested `DepartmentInfo` builder — a pattern I wouldn't have discovered quickly on my own.
-
----
-
-## Key Moments Where I Made the Calls
-
-### The CQRS Pivot
-Midway through, I decided: **GET endpoints should read from MongoDB, not Postgres**. This is a real architectural pattern (CQRS). AI refactored the entire `EmployeeService` in one pass — but the decision was mine, based on understanding what the event log was for.
-
-### Standards Audit
-I asked AI to audit the project against best practices. It found 6 real issues — a wrong Kafka port, missing validation, a lazy loading bug, wrong starter dependency names. I understood each one before accepting the fix.
-
----
-
-## What I Actually Learned
-
-| Topic | How I Learned It |
+| Component | What was generated |
 |---|---|
-| Kafka producers/consumers | Built one, watched it break, fixed it |
-| Avro logical types | Read the generated code, understood the mapping |
-| CQRS pattern | Made the architectural decision myself, saw it implemented |
-| Schema Registry | Understood why it exists when consumer deserialization was set up |
-| Spring Boot transaction management | Hit the `LazyInitializationException`, understood why `@Transactional(readOnly=true)` fixes it |
-| Proper REST error handling | Saw 500s where 404s should be, fixed it with `@RestControllerAdvice` |
+| Project scaffold | `build.gradle`, package structure, Docker Compose, `application.yml` |
+| Domain model | `Employee`, `Department`, `EmployeeEventDocument` with JPA, Lombok, MongoDB annotations |
+| Avro schema | `message.avsc` with correct logical types — decimal, date, nested record, enum |
+| Kafka producer | Async send with headers, CompletableFuture callbacks, structured logging |
+| Kafka consumer | Header extraction, MongoDB persistence, null payload guard |
+| MapStruct mapper | `@Context` for event type, expression mappings, nested builder |
+| REST layer | Controllers, services, repositories, DTOs, validation, error handling |
+| Integration tests | Real Testcontainers setup — Postgres, Kafka, Schema Registry, MongoDB |
+| All documentation | README, AI docs, conversation log — written from actual code state |
 
 ---
 
-## The Multi-Language Plan
+## What I Decided
 
-Now that I understand the Kafka integration patterns in Java, I'll rebuild the **exact same application** in Go, Python, and Node.js — using the same approach. Same architecture, same Avro schema, same Kafka topic. Different language, different patterns, same understanding built each time.
+- **Architecture** — CQRS split: writes to Postgres, reads from MongoDB
+- **Scope** — dropped tests when they blocked progress, came back to them later
+- **Standards** — asked for an audit; reviewed and accepted each fix
+- **Roadmap** — same app, multiple languages, to compare AI behaviour across ecosystems
+- **Documentation style** — LinkedIn-pitch framing, learning narrative, not just technical docs
+
+---
+
+## The Multi-Language Experiment
+
+Now that Java is done, I'll rebuild the **exact same application** in Go, Python, and Node.js — using the same prompt, the same AI tool, and watching what changes:
+
+- Does AI need more or less guidance in a dynamically typed language?
+- How does it handle a language with no established "framework" for everything?
+- Where does it make different tradeoffs?
+- Which language produces the least boilerplate with AI assistance?
+
+The prompt to do this is in [`prompt-new-language.md`](./prompt-new-language.md).

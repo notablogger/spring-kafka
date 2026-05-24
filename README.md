@@ -1,29 +1,35 @@
-# kafka-ai — Learning Kafka Integration with AI
+# kafka-ai — Learning to Work with AI, One Language at a Time
 
-> 🚀 **A personal learning project** — building a production-style event-driven system from scratch, using GitHub Copilot as a pair-programmer, with a plan to rebuild the same thing in multiple languages.
-
----
-
-## 🎯 The Goal
-
-I'm on a mission to deeply understand **Kafka integration patterns** by building the same event-driven application in multiple programming languages — starting with Java/Spring Boot, then Go, Python, and Node.js.
-
-Rather than spending weeks on boilerplate, I used **GitHub Copilot (AI)** to accelerate every layer of the build — letting me focus on *understanding the architecture* rather than fighting the setup. Every decision was mine; AI was the hands.
+> 🧠 **The real goal isn't Kafka. It's learning how to use AI effectively** — understanding how it thinks, how it responds to different prompts, and how to get real production-quality work done through conversation alone.
+>
+> Kafka + multi-language is the vehicle. AI is the subject.
 
 ---
 
-## 🤖 How AI Helped Me Learn
+## 🎯 The Mission
 
-This isn't a "let AI do it for me" project. It's a **learning accelerator**:
+Most people use AI to autocomplete lines of code. I'm using it differently — as a **study in how AI behaves**.
 
-- I described *what* I wanted to build — AI generated the scaffold
-- I asked *why* things worked a certain way — AI explained
-- When something broke — I diagnosed it with AI, understood the root cause, and fixed it
-- When the architecture needed to change (e.g. reads from MongoDB instead of Postgres) — I made that call, AI refactored
+This project is an experiment: can I build a production-grade event-driven system, in multiple programming languages, purely through conversation with an AI agent? No tutorials. No copy-paste. Just prompts.
 
-**The result:** I learned Kafka producers/consumers, Avro schema design, CQRS patterns, and Spring Boot integration in days, not weeks.
+Three things I'm learning at once:
+1. **How AI works** — how it interprets vague vs precise prompts, when it makes decisions vs asks questions, how it handles ambiguity, bugs, and architectural pivots
+2. **Kafka integration patterns** — producers, consumers, Avro, Schema Registry, CQRS
+3. **Different programming languages** — same problem, different paradigms, different ecosystems
 
-📁 See the [`AI docs/`](./AI%20docs/) folder for the full journey — every conversation, every fix, every prompt.
+---
+
+## 🤖 What I'm Learning About AI
+
+This isn't about the code. It's about the tool.
+
+- **How specific do prompts need to be?** — Some prompts were one line. Some needed detail. Watching what AI does with each taught me where precision matters.
+- **When does AI decide vs ask?** — AI never asked for clarification when it could act. Understanding that boundary helps you write better prompts.
+- **How does AI handle failure?** — When tests failed, AI diagnosed iteratively. Watching it work through the problem taught me how it reasons.
+- **When do you override AI?** — Every architectural decision (CQRS reads from MongoDB, dropping tests, the multi-language plan) was mine. AI executed. Knowing when to take the wheel is the skill.
+- **How do you audit AI output?** — Asking "does this follow best practices?" found 6 real bugs. That prompt is now part of my workflow.
+
+📁 The full story is in [`AI docs/`](./AI%20docs/) — every prompt, every response, every decision.
 
 ---
 
@@ -48,7 +54,7 @@ GET → EmployeeService → MongoDB (latest event per employee)
 
 ---
 
-## 🛠️ Stack
+## 🛠️ Stack (Java Version)
 
 | Layer | Technology |
 |---|---|
@@ -115,7 +121,7 @@ docker-compose up -d
 
 ## 🌍 Multi-Language Roadmap
 
-The same application will be rebuilt in each language to compare patterns, boilerplate, and DX:
+Same problem. Same architecture. Different language each time. The goal is to see how AI adapts — and how the languages compare.
 
 | Language | Framework | Status |
 |---|---|---|
@@ -124,7 +130,7 @@ The same application will be rebuilt in each language to compare patterns, boile
 | 🐍 Python | FastAPI + confluent-kafka | 🔜 Planned |
 | 🟨 Node.js | NestJS + kafkajs | 🔜 Planned |
 
-Each version will live in its own folder/branch with the same REST contract and Kafka topic structure.
+Each version uses the same REST contract, same Kafka topic, same Avro schema. The prompt to build each one is in [`AI docs/prompt-new-language.md`](./AI%20docs/prompt-new-language.md).
 
 ---
 
@@ -132,70 +138,48 @@ Each version will live in its own folder/branch with the same REST contract and 
 
 | File | What's inside |
 |---|---|
-| [`how-ai-helped-me-build-this.md`](./AI%20docs/how-ai-helped-me-build-this.md) | What AI generated, what I decided, and how I learned |
-| [`conversation-log.md`](./AI%20docs/conversation-log.md) | Full table of every prompt → AI action |
+| [`how-ai-helped-me-build-this.md`](./AI%20docs/how-ai-helped-me-build-this.md) | What AI generated, what I decided, and what I actually learned |
+| [`conversation-log.md`](./AI%20docs/conversation-log.md) | Every prompt, what AI understood, what it did |
 | [`prompt-new-language.md`](./AI%20docs/prompt-new-language.md) | Reusable prompt to rebuild in any language + full prompt history |
 
 ---
 
-## 💡 Key Design Decisions
+## 💡 Key Technical Decisions
 
-- **GET from MongoDB** — reads are served from the event log. Every GET returns the latest non-deleted event snapshot, including `eventType` and `eventTimestamp`
-- **Avro logical types** — `BigDecimal` (decimal) and `LocalDate` (date) mapped natively via Avro logical types — no manual conversion
-- **Consumer appends only** — never writes back to Postgres. Postgres is exclusively owned by the write layer
-- **Proper error handling** — `@RestControllerAdvice` returns clean JSON errors with correct HTTP status codes (404, 400, 500)
-- **Input validation** — all DTOs validated with `@NotBlank`, `@Email`, `@DecimalMin` etc.
-
----
-
-## 🧠 What I Learned
-
-- How Kafka producers and consumers work at the code level
-- Avro schema design with logical types (decimal, date, nested records, enums)
-- CQRS — separating read and write models across different databases
-- How to use AI as a learning tool, not a shortcut
-- Schema Registry and why it matters for contract enforcement
+- **GET from MongoDB** — reads from the event log. Latest non-deleted snapshot per employee, including `eventType` and `eventTimestamp`
+- **Avro logical types** — `BigDecimal` and `LocalDate` via Avro logical types — no manual conversion
+- **Consumer appends only** — never writes back to Postgres
+- **Proper error handling** — `@RestControllerAdvice` with correct HTTP status codes
+- **Input validation** — `@NotBlank`, `@Email`, `@DecimalMin` on all DTOs
 
 ---
 
 ## 🧪 Running Tests
 
-Integration tests spin up **real containers** via Testcontainers — no mocks, no stubs.
+Integration tests spin up **real containers** — no mocks.
 
 ```bash
 ./gradlew test
 ```
 
-### What the tests cover
-
-| Test | What it verifies |
-|---|---|
-| `createDepartment_validRequest_returns201` | POST creates dept, returns 201 + body |
-| `getAllDepartments_returns200WithList` | GET returns list containing created dept |
-| `getDepartmentById_existingId_returns200` | GET by ID returns correct body |
-| `getDepartmentById_nonExistentId_returns404` | Missing ID returns 404, not 500 |
-| `updateDepartment_validRequest_returns200` | PUT updates name/location |
-| `createDepartment_missingName_returns400` | Validation rejects blank name |
-| `createEmployee_validRequest_returns201AndSavesToPostgres` | POST creates employee in Postgres |
-| `createEmployee_kafkaProducerFiresEvent_consumerSavesToMongoDB` | Kafka CREATED event lands in MongoDB with correct fields |
-| `getEmployeeById_readsFromMongoDB_returnsCorrectSnapshot` | GET reads from MongoDB, returns eventType + eventTimestamp |
-| `getAllEmployees_readsFromMongoDB_returnsNonEmptyList` | GET all reads from MongoDB |
-| `getEmployeesByDepartment_readsFromMongoDB_returnsFilteredList` | Department filter works from MongoDB |
-| `updateEmployee_kafkaProducerFiresUpdatedEvent_consumerSavesToMongoDB` | Kafka UPDATED event lands in MongoDB |
-| `getEmployeeById_afterUpdate_returnsUpdatedSnapshot` | GET returns latest (UPDATED) snapshot |
-| `deleteEmployee_removedFromPostgres_deletedEventInMongoDB_getReturns404` | DELETE fires DELETED event; GET returns 404 |
-| `createEmployee_invalidEmail_returns400` | Email validation rejects bad format |
-| `createEmployee_zeroSalary_returns400` | Salary validation rejects zero |
-| `createEmployee_nonExistentDepartment_returns404` | Unknown dept ID returns 404 |
-| `deleteDepartment_validId_returns204` | DELETE returns 204 |
-
-### Infrastructure spun up per test run
-
 | Container | Image | Purpose |
 |---|---|---|
-| PostgreSQL | `postgres:16` | Write DB for employees/departments |
+| PostgreSQL | `postgres:16` | Write DB |
 | Kafka | `confluentinc/cp-kafka:7.6.1` | Event broker |
-| Schema Registry | `confluentinc/cp-schema-registry:7.6.1` | Avro schema validation (real, not mock) |
+| Schema Registry | `confluentinc/cp-schema-registry:7.6.1` | Avro validation |
 | MongoDB | `mongo:7` | Event log / read model |
 
-> ⏱ Expect the full suite to take **2–3 minutes** — the Kafka flow tests use `Awaitility` and wait up to 20 seconds for the async consumer to process each event.
+> ⏱ Full suite takes **2–3 minutes** — Kafka flow tests use Awaitility and wait up to 20 seconds for the async consumer.
+
+---
+
+## 🧠 What I'm Taking Away
+
+| Skill | How This Project Taught It |
+|---|---|
+| Using AI effectively | Watched it reason, fail, recover, and pivot across 10+ sessions |
+| Prompt engineering | Learned what to be specific about and what to leave to AI |
+| Kafka integration | Built producer, consumer, Avro, Schema Registry from scratch |
+| CQRS pattern | Made the architectural call to split reads and writes across databases |
+| Code quality habits | Asking AI to audit caught 6 production bugs I'd have missed |
+| Multi-language thinking | Same problem in Go/Python/Node will expose what's language vs what's pattern |
