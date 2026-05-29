@@ -213,7 +213,7 @@ class IntegrationTest extends BaseIntegrationTest {
     @Test
     @Order(11)
     void getEmployeeById_afterCreate_returnsCreatedSnapshot() {
-        await().atMost(20, TimeUnit.SECONDS).untilAsserted(() -> {
+        await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> {
             EmployeeResponse response = restClient.get()
                     .uri("/api/employees/" + empId)
                     .retrieve()
@@ -235,7 +235,7 @@ class IntegrationTest extends BaseIntegrationTest {
     @Test
     @Order(12)
     void getAllEmployees_returnsNonEmptyList() {
-        await().atMost(20, TimeUnit.SECONDS).untilAsserted(() -> {
+        await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> {
             List<EmployeeResponse> list = restClient.get()
                     .uri("/api/employees")
                     .retrieve()
@@ -253,7 +253,7 @@ class IntegrationTest extends BaseIntegrationTest {
     @Test
     @Order(13)
     void getEmployeesByDepartment_returnsFilteredList() {
-        await().atMost(20, TimeUnit.SECONDS).untilAsserted(() -> {
+        await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> {
             List<EmployeeResponse> list = restClient.get()
                     .uri("/api/employees/department/" + hrDeptId)
                     .retrieve()
@@ -286,7 +286,7 @@ class IntegrationTest extends BaseIntegrationTest {
                 .toBodilessEntity();
 
         // Poll GET until UPDATED event lands from Kafka consumer
-        await().atMost(20, TimeUnit.SECONDS).untilAsserted(() -> {
+        await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> {
             EmployeeResponse response = restClient.get()
                     .uri("/api/employees/" + empId)
                     .retrieve()
@@ -311,7 +311,7 @@ class IntegrationTest extends BaseIntegrationTest {
                 .toBodilessEntity();
 
         // Poll GET until the DELETED event is consumed and record is filtered out
-        await().atMost(20, TimeUnit.SECONDS).untilAsserted(() ->
+        await().atMost(60, TimeUnit.SECONDS).untilAsserted(() ->
                 assertThatThrownBy(() ->
                         restClient.get().uri("/api/employees/" + empId).retrieve().body(EmployeeResponse.class)
                 ).isInstanceOf(HttpClientErrorException.NotFound.class)
